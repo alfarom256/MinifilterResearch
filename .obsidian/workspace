@@ -1,0 +1,156 @@
+{
+  "main": {
+    "id": "442691666d5054e8",
+    "type": "split",
+    "children": [
+      {
+        "id": "e9a887463a0e62ce",
+        "type": "leaf",
+        "dimension": 83.79870129870129,
+        "state": {
+          "type": "markdown",
+          "state": {
+            "file": "2.1 FltRegisterFilter.md",
+            "mode": "source",
+            "source": false
+          }
+        }
+      },
+      {
+        "id": "f2750f8a43419a6a",
+        "type": "leaf",
+        "dimension": 16.201298701298704,
+        "state": {
+          "type": "markdown",
+          "state": {
+            "file": "0.0 Layout.md",
+            "mode": "source",
+            "source": false
+          }
+        }
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fd4b6fdb88d7aa7e",
+    "type": "split",
+    "children": [
+      {
+        "id": "79a29a56f9d681c4",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4433f97c8e5d8c48",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {}
+            }
+          },
+          {
+            "id": "cca047fbafc13b26",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "75167dcc13e3f04b",
+            "type": "leaf",
+            "state": {
+              "type": "starred",
+              "state": {}
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "225f90da8bb5c400",
+    "type": "split",
+    "children": [
+      {
+        "id": "e9d06bc128193e97",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "eaf4fecc7d3fd415",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "2.1 FltRegisterFilter.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "9c32308a755133ce",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "2.1 FltRegisterFilter.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "68ee72a366c97724",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "4b5355b08d030429",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "2.1 FltRegisterFilter.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "active": "e9a887463a0e62ce",
+  "lastOpenFiles": [
+    "0.0 Layout.md",
+    "2.1 FltRegisterFilter.md",
+    "1.1 Writing a file system minifilter.md",
+    "1.2 Tracing a call from CreateFile to a Minifilter.md",
+    "5 Exploitation.md",
+    "1. What is a FS Minifilter.md",
+    "Goals for Minifilter.md",
+    "3. Fltmgr.sys internals.md"
+  ]
+}
