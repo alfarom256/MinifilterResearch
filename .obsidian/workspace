@@ -144,13 +144,13 @@
   },
   "active": "e9a887463a0e62ce",
   "lastOpenFiles": [
-    "0.0 Layout.md",
+    "Goals for Minifilter.md",
     "2.1 FltRegisterFilter.md",
-    "1.1 Writing a file system minifilter.md",
     "1.2 Tracing a call from CreateFile to a Minifilter.md",
+    "0.0 Layout.md",
+    "1.1 Writing a file system minifilter.md",
     "5 Exploitation.md",
     "1. What is a FS Minifilter.md",
-    "Goals for Minifilter.md",
     "3. Fltmgr.sys internals.md"
   ]
 }
