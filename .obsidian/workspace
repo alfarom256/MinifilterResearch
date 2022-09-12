@@ -10,7 +10,7 @@
         "state": {
           "type": "markdown",
           "state": {
-            "file": "2.1 FltRegisterFilter.md",
+            "file": "5 Exploitation.md",
             "mode": "source",
             "source": false
           }
@@ -91,7 +91,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "2.1 FltRegisterFilter.md",
+                "file": "5 Exploitation.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -108,7 +108,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "2.1 FltRegisterFilter.md",
+                "file": "5 Exploitation.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -131,7 +131,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "2.1 FltRegisterFilter.md"
+                "file": "5 Exploitation.md"
               }
             }
           }
@@ -145,12 +145,12 @@
   "active": "e9a887463a0e62ce",
   "lastOpenFiles": [
     "Goals for Minifilter.md",
-    "2.1 FltRegisterFilter.md",
-    "1.2 Tracing a call from CreateFile to a Minifilter.md",
-    "0.0 Layout.md",
-    "1.1 Writing a file system minifilter.md",
     "5 Exploitation.md",
+    "3. Fltmgr.sys internals.md",
+    "2.1 FltRegisterFilter.md",
+    "0.0 Layout.md",
     "1. What is a FS Minifilter.md",
-    "3. Fltmgr.sys internals.md"
+    "1.2 Tracing a call from CreateFile to a Minifilter.md",
+    "1.1 Writing a file system minifilter.md"
   ]
 }

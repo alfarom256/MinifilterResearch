@@ -1,6 +1,7 @@
 #include <fltKernel.h>
 #include <ntddk.h>
 #include "Callbacks.h"
+#include "Helpers.h"
 
 EXTERN_C NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath);
 NTSTATUS FsFilterUnload(_In_ FLT_FILTER_UNLOAD_FLAGS Flags);
@@ -52,5 +53,6 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 	}
 
 	FltStartFiltering(g_FilterHandle);
+	FindFltGlobals();
 	return status;
 }
