@@ -10,7 +10,7 @@ PVOID PatternSearch(PVOID pBegin, SIZE_T szMaxSearch, PUCHAR searchBytes, PUCHAR
 			} else if (pBeginIter[szIdx + i] != searchBytes[i]) {
 				break;
 			} else if (i + 1 == szSearchBytes) {
-				return pBeginIter + szIdx - (i + 1);
+				return pBeginIter + szIdx;
 			}
 		}
 	}
@@ -21,7 +21,7 @@ PVOID FindFltGlobals() {
 	PVOID lpFltGlobals = NULL;
 	PUCHAR lpFltGlobalsData = NULL;
 	PVOID lpFltEnumerateFilters = FltGetRoutineAddress("FltEnumerateFilters");
-	DWORD32 dwOffset = 0;
+	INT32 dwOffset = 0;
 
 	UCHAR ucharLoadFltGlobals[3] = {
 		0x48, 0x8d, 0x0d, // lea rcx, cs:FltGlobals+0x58
@@ -50,8 +50,20 @@ PVOID FindFltGlobals() {
 		return NULL;
 	}
 
-	dwOffset = *(DWORD32*)(lpFltGlobalsData + 3);
-	lpFltGlobals = (PVOID)(lpFltGlobalsData + sizeof(ucharLoadFltGlobals) + dwOffset);
+	dwOffset = *(INT32*)(lpFltGlobalsData + 3);
+
+	/*
+	fffff80d`769e4e83 0f1f440000      nop     dword ptr [rax+rax]
+	fffff80d`769e4e88 b201            mov     dl,1
+	fffff80d`769e4e8a 488d0d0757fdff  lea     rcx,[FLTMGR!FltGlobals+0x58 (fffff80d`769ba598)]
+	fffff80d`769e4e91 48ff15a0c2fdff  call    qword ptr [FLTMGR!_imp_ExAcquireResourceSharedLite (fffff80d`769c1138)]
+	fffff80d`769e4e98 0f1f440000      nop     dword ptr [rax+rax]
+
+	calculation is from rip relative lea
+	we should be getting FltGlobals+0x58 which is why 0x58 is subtracted
+	*/
+
+	lpFltGlobals = (PVOID)(lpFltGlobalsData + 7 + dwOffset - 0x58);
 	DbgPrint("FLTMGR!FltGlobals is at %p\n", lpFltGlobals);
 	return lpFltGlobals;
 }
