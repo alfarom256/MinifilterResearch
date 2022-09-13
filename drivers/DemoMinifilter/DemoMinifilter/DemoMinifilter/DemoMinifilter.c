@@ -55,12 +55,16 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 
 	FltStartFiltering(g_FilterHandle);
 	
-	/*status = PsCreateSystemThread(&hSystemThread, 0, NULL, (HANDLE)-1, &createdClientId, DbgPrintAllFilters, NULL);
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[DriverEntry] Failed to create system thread");
+	UNICODE_STRING strFilterName = RTL_CONSTANT_STRING(L"DemoMinifilter");
+	PFLT_OPERATION_REGISTRATION lpFltOpReg_Create = QueryMinifilterMajorOperation(&strFilterName, IRP_MJ_CREATE);
+	if (!lpFltOpReg_Create) {
+		DbgPrint("Could not find IRP_MJ_CREATE for filter %wZ\n", &strFilterName);
 		return status;
-	}*/
+	}
 
-	DbgPrintAllFilters();
+	DbgPrint("Found IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
+	DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
+	DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
+	DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
 	return status;
 }

@@ -35,8 +35,10 @@ PVOID FindRet1()
 	};
 	UCHAR ucMask[6] = { 1,1,1,1,1,1 };
 
-	return PatternSearch(lpKeQueryPriorityThread, 0x100, &ucSearchBytes, &ucMask, sizeof(ucMask));
+	return PatternSearch(lpKeQueryPriorityThread, 0x100, (PUCHAR)&ucSearchBytes, (PUCHAR)&ucMask, sizeof(ucMask));
 }
+
+
 
 
 PVOID FindFltGlobals() {
@@ -116,6 +118,9 @@ VOID DbgPrintAllFilters()
 
 VOID WalkLinkedList(PFLTP_FRAME lpFltFrame)
 {
+	PVOID returnOne = FindRet1();
+	DbgPrint("Found ret1 at %p\n", returnOne);
+
 	ULONG ulCount = lpFltFrame->RegisteredFilters.rCount;
 	PLIST_ENTRY listHead = lpFltFrame->RegisteredFilters.rList.Flink;
 	PLIST_ENTRY listIter = listHead;
@@ -132,7 +137,6 @@ VOID WalkLinkedList(PFLTP_FRAME lpFltFrame)
 
 VOID PrintOperationsForFilter(PFLT_FILTER lpFilter)
 {
-	UNREFERENCED_PARAMETER(lpFilter);
 	FLT_OPERATION_REGISTRATION* Callbacks = lpFilter->Operations;
 	
 	if (Callbacks == NULL) {
@@ -149,4 +153,56 @@ VOID PrintOperationsForFilter(PFLT_FILTER lpFilter)
 		DbgPrint("\t\tFlags: 0x%x\n", Callbacks->Flags);
 		Callbacks++;
 	}
+}
+
+PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilterName, ULONG MajorFunction)
+{
+	DbgPrint("[QueryMinifilterMajorOperation] Searching for filter %wZ with major function 0x%x\n", lpFilterName, MajorFunction);
+
+	// get the globals
+	PVOID lpFltGlobals = FindFltGlobals();
+	if (!lpFltGlobals) {
+		return NULL;
+	}
+
+	// get the FLTP_FRAME from the globals
+	PFLTP_FRAME lpFltFrame = GetFrameFromGlobals(lpFltGlobals);
+	if (!lpFltFrame) {
+		return NULL;
+	}
+
+	ULONG ulCount = lpFltFrame->RegisteredFilters.rCount;
+	PLIST_ENTRY listHead = lpFltFrame->RegisteredFilters.rList.Flink;
+	PLIST_ENTRY listIter = listHead;
+
+	// walk over each filter
+	for (ULONG i = 0; i < ulCount; i++) {
+		PFLT_FILTER lpFilter = (PFLT_FILTER)((SIZE_T)listIter - 0x10);
+
+
+		// if the names match
+		if (!RtlCompareUnicodeString(lpFilterName, &lpFilter->Name, TRUE)) {
+			FLT_OPERATION_REGISTRATION* Callbacks = lpFilter->Operations;
+
+			if (Callbacks == NULL) {
+				DbgPrint("\tCallbacks is NULL!\n");
+				return NULL; // if the callbacks are null there's nothing to return, so return NULL
+			}
+
+			// walk each of the callbacks until we find the major function we need
+			while (Callbacks->MajorFunction != IRP_MJ_OPERATION_END) {
+				if (Callbacks->MajorFunction == MajorFunction) {
+					return (PVOID)Callbacks;
+				}
+				Callbacks++;
+			}
+			// if the names match and we didn't find it, it's not supported by the filter
+			// and we return NULL
+			return NULL;
+		}
+
+		// if the names don't match, continue on
+		listIter = listIter->Flink;
+	}
+	return NULL;
 }
