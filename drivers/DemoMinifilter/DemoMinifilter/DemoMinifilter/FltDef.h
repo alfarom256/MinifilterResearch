@@ -63,8 +63,6 @@ typedef struct _FLTP_FRAME {
 	PVOID ReserveIrpCtrls; // fuck that define it yourself
 } FLTP_FRAME, *PFLTP_FRAME;
 
-
-
 /*
 0: kd> dt FLTMGR!_FLTP_FRAME
    +0x000 Type             : _FLT_TYPE
@@ -91,3 +89,45 @@ typedef struct _FLTP_FRAME {
    +0x480 LargeIrpCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
    +0x500 ReserveIrpCtrls  : _RESERVE_IRPCTRL
 */
+
+typedef struct _FLT_OBJECT {
+	ULONG Flags;
+	ULONG PointerCount;
+	EX_RUNDOWN_REF RundownRef;
+	LIST_ENTRY PrimaryLink;
+	GUID UniqueIdenfitier;
+} FLT_OBJECT, *PFLT_OBJECT;
+
+
+typedef struct _FLT_FILTER {
+	FLT_OBJECT Base;
+	PVOID Frame;
+	UNICODE_STRING Name;
+	UNICODE_STRING DefaultAltitude;
+	DWORD64 Flags;
+	PDRIVER_OBJECT DriverObject;
+	FLT_RESOURCE_LIST_HEAD InstanceList;
+	PVOID VerifierExtension;
+	LIST_ENTRY VerifiedFiltersLink;
+	PULONG FilterUnload;
+	PULONG InstanceSetup;
+	PULONG InstanceQueryTeardown;
+	PVOID InstanceTeardownStart;
+	PVOID InstanceTeardownComplete;
+	PVOID SupportedContextsListHead;
+	PVOID SupportedContexts[7];
+	PVOID PreVolumeMount;
+	PVOID PostVolumeMount;
+	PVOID GenerateFileName;
+	PVOID NormalizeNameComponent;
+	PVOID NormalizeNameComponentEx;
+	PVOID NormalizeContextCleanup;
+	PVOID KtmNotification;
+	PVOID SectionNotification;
+	PFLT_OPERATION_REGISTRATION Operations;
+	PVOID OldDriverUnload;
+	FLT_MUTEX_LIST_HEAD ActiveOpens;
+	FLT_MUTEX_LIST_HEAD ConnectionList;
+	FLT_MUTEX_LIST_HEAD PortList;
+	EX_PUSH_LOCK PortLock;
+} FLT_FILTER, *PFLT_FILTER;

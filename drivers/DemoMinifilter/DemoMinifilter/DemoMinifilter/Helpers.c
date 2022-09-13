@@ -73,10 +73,58 @@ PVOID FindFltGlobals() {
 	return lpFltGlobals;
 }
 
-PVOID DbgPrintAllFilters()
+PFLTP_FRAME GetFrameFromGlobals(PVOID lpFltGlobals)
+{
+	if (!lpFltGlobals) {
+		return NULL;
+	}
+	return (PFLTP_FRAME)((SIZE_T)(*(PVOID*)((SIZE_T)lpFltGlobals + 0xc8)) - 8);
+}
+
+VOID DbgPrintAllFilters()
 {
 	PVOID lpFltGlobals = FindFltGlobals();
-	PFLTP_FRAME lpFltFrame = (PFLTP_FRAME)((SIZE_T)(*(PVOID*)((SIZE_T)lpFltGlobals + 0xc8))-8);
+	if (!lpFltGlobals) {
+		return;
+	}
+
+	PFLTP_FRAME lpFltFrame = GetFrameFromGlobals(lpFltGlobals);
+	WalkLinkedList(lpFltFrame);
+}
+
+VOID WalkLinkedList(PFLTP_FRAME lpFltFrame)
+{
+	ULONG ulCount = lpFltFrame->RegisteredFilters.rCount;
+	PLIST_ENTRY listHead = lpFltFrame->RegisteredFilters.rList.Flink;
+	PLIST_ENTRY listIter = listHead;
+
+	for (ULONG i = 0; i < ulCount; i++) {
+		PFLT_FILTER lpFilter = (PFLT_FILTER)((SIZE_T)listIter - 0x10);
+		DbgPrint("[WalkLinkedList] Found filter at - %p\n", lpFilter);
+		DbgPrint("\tFilter Name - %wZ\n", &lpFilter->Name);
+		DbgPrint("\tFilter Altitude - %wZ\n", &lpFilter->DefaultAltitude);
+		PrintOperationsForFilter(lpFilter);
+		listIter = listIter->Flink;
+	}
+}
+
+VOID PrintOperationsForFilter(PFLT_FILTER lpFilter)
+{
+	UNREFERENCED_PARAMETER(lpFilter);
+	FLT_OPERATION_REGISTRATION* Callbacks = lpFilter->Operations;
 	
-	return lpFltFrame;
+	if (Callbacks == NULL) {
+		DbgPrint("\tCallbacks is NULL!\n");
+		return;
+	}
+
+	while (Callbacks->MajorFunction != IRP_MJ_OPERATION_END) {
+		DbgPrint("\tMajorFunction: 0x%x\n", Callbacks->MajorFunction);
+		if(Callbacks->PreOperation)
+			DbgPrint("\t\tPre Operation: %p\n", Callbacks->PreOperation);
+		if (Callbacks->PreOperation)
+			DbgPrint("\t\tPost Operation: %p\n", Callbacks->PostOperation);
+		DbgPrint("\t\tFlags: 0x%x\n", Callbacks->Flags);
+		Callbacks++;
+	}
 }
