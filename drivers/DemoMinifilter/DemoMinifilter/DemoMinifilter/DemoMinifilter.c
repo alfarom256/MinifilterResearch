@@ -2,6 +2,7 @@
 #include <ntddk.h>
 #include "Callbacks.h"
 #include "Helpers.h"
+#include "FltDef.h"
 
 EXTERN_C NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath);
 NTSTATUS FsFilterUnload(_In_ FLT_FILTER_UNLOAD_FLAGS Flags);
@@ -53,6 +54,13 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 	}
 
 	FltStartFiltering(g_FilterHandle);
-	FindFltGlobals();
+	
+	/*status = PsCreateSystemThread(&hSystemThread, 0, NULL, (HANDLE)-1, &createdClientId, DbgPrintAllFilters, NULL);
+	if (!NT_SUCCESS(status)) {
+		DbgPrint("[DriverEntry] Failed to create system thread");
+		return status;
+	}*/
+
+	DbgPrintAllFilters();
 	return status;
 }

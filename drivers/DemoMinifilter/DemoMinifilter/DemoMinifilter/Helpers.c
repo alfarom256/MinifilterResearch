@@ -35,7 +35,7 @@ PVOID FindFltGlobals() {
 		return NULL;
 	}
 
-	DbgPrint("Found FltEnumerateFilters at %p\nStarting pattern search in FltEnumerateFilters\n", lpFltEnumerateFilters);
+	DbgPrint("[FindFltGlobals] Found FltEnumerateFilters at %p\nStarting pattern search in FltEnumerateFilters\n", lpFltEnumerateFilters);
 
 	lpFltGlobalsData = PatternSearch(
 		lpFltEnumerateFilters, 
@@ -46,24 +46,37 @@ PVOID FindFltGlobals() {
 	);
 
 	if (!lpFltGlobalsData) {
-		DbgPrint("Failed to find byte pattern...\n");
+		DbgPrint("[FindFltGlobals] Failed to find byte pattern...\n");
 		return NULL;
 	}
 
 	dwOffset = *(INT32*)(lpFltGlobalsData + 3);
 
 	/*
-	fffff80d`769e4e83 0f1f440000      nop     dword ptr [rax+rax]
-	fffff80d`769e4e88 b201            mov     dl,1
-	fffff80d`769e4e8a 488d0d0757fdff  lea     rcx,[FLTMGR!FltGlobals+0x58 (fffff80d`769ba598)]
-	fffff80d`769e4e91 48ff15a0c2fdff  call    qword ptr [FLTMGR!_imp_ExAcquireResourceSharedLite (fffff80d`769c1138)]
-	fffff80d`769e4e98 0f1f440000      nop     dword ptr [rax+rax]
+		uf FLTMGR!FltEnumerateFilters
 
-	calculation is from rip relative lea
-	we should be getting FltGlobals+0x58 which is why 0x58 is subtracted
+
+		...
+		fffff80d`769e4e83 0f1f440000      nop     dword ptr [rax+rax]
+		fffff80d`769e4e88 b201            mov     dl,1
+		fffff80d`769e4e8a 488d0d0757fdff  lea     rcx,[FLTMGR!FltGlobals+0x58 (fffff80d`769ba598)] // <------- this
+		fffff80d`769e4e91 48ff15a0c2fdff  call    qword ptr [FLTMGR!_imp_ExAcquireResourceSharedLite (fffff80d`769c1138)]
+		fffff80d`769e4e98 0f1f440000      nop     dword ptr [rax+rax]
+		...
+
+		calculation is from rip relative lea
+		we should be getting FltGlobals+0x58 which is why 0x58 is subtracted
 	*/
 
 	lpFltGlobals = (PVOID)(lpFltGlobalsData + 7 + dwOffset - 0x58);
-	DbgPrint("FLTMGR!FltGlobals is at %p\n", lpFltGlobals);
+	DbgPrint("[FindFltGlobals] FLTMGR!FltGlobals is at %p\n", lpFltGlobals);
 	return lpFltGlobals;
+}
+
+PVOID DbgPrintAllFilters()
+{
+	PVOID lpFltGlobals = FindFltGlobals();
+	PFLTP_FRAME lpFltFrame = (PFLTP_FRAME)((SIZE_T)(*(PVOID*)((SIZE_T)lpFltGlobals + 0xc8))-8);
+	
+	return lpFltFrame;
 }
