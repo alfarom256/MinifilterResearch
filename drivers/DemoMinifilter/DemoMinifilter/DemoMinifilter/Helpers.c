@@ -17,6 +17,28 @@ PVOID PatternSearch(PVOID pBegin, SIZE_T szMaxSearch, PUCHAR searchBytes, PUCHAR
     return NULL;
 }
 
+PVOID FindRet1()
+{
+	UNICODE_STRING strKeQueryPriorityThread = RTL_CONSTANT_STRING(L"KeQueryPriorityThread");
+	PVOID lpKeQueryPriorityThread = MmGetSystemRoutineAddress(&strKeQueryPriorityThread);
+	if (!lpKeQueryPriorityThread) {
+		return NULL;
+	}
+
+	UCHAR ucSearchBytes[6] = {
+		0xb8, 0x01, 0x00, 0x00, 0x00, 
+		// mov eax, 1
+		// aka
+		// mov eax, FLT_PREOP_SUCCESS_NO_CALLBACK
+		0xc3 
+		// ret
+	};
+	UCHAR ucMask[6] = { 1,1,1,1,1,1 };
+
+	return PatternSearch(lpKeQueryPriorityThread, 0x100, &ucSearchBytes, &ucMask, sizeof(ucMask));
+}
+
+
 PVOID FindFltGlobals() {
 	PVOID lpFltGlobals = NULL;
 	PUCHAR lpFltGlobalsData = NULL;
