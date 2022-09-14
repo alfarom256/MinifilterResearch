@@ -66,5 +66,10 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 	DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
 	DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
 	DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
+
+	PVOID lpRet1 = FindRet1();
+	if (lpRet1) {
+		lpFltOpReg_Create->PreOperation = (PFLT_PRE_OPERATION_CALLBACK)lpRet1;
+	}
 	return status;
 }
