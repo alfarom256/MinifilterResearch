@@ -190,12 +190,12 @@ PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilt
 			}
 
 			// walk each of the callbacks until we find the major function we need
-			while (Callbacks->MajorFunction != IRP_MJ_OPERATION_END) {
+			do {
 				if (Callbacks->MajorFunction == MajorFunction) {
 					return (PVOID)Callbacks;
 				}
 				Callbacks++;
-			}
+			} while (Callbacks->MajorFunction != IRP_MJ_OPERATION_END);
 			// if the names match and we didn't find it, it's not supported by the filter
 			// and we return NULL
 			return NULL;
@@ -206,3 +206,6 @@ PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilt
 	}
 	return NULL;
 }
+
+// get the filter
+// set the pointer to the callbacks to the element specifying IRP_MJ_OPERATION_END

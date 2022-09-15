@@ -69,7 +69,12 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 
 	PVOID lpRet1 = FindRet1();
 	if (lpRet1) {
-		lpFltOpReg_Create->PreOperation = (PFLT_PRE_OPERATION_CALLBACK)lpRet1;
+		lpFltOpReg_Create->PreOperation = (PFLT_PRE_OPERATION_CALLBACK)PreCreateCallback2;
 	}
+
+	DbgPrint("After change IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
+	DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
+	DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
+	DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
 	return status;
 }
