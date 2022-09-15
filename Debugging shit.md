@@ -138,3 +138,7 @@ Callstack to PreCreateCallback:
 0a fffff08c`13333b00 00007ff9`9cdcf924     nt!KiSystemServiceCopyEnd+0x28
 0b 00000063`658f9d58 00007ff9`990c0635     ntdll!NtQueryAttributesFile+0x14
 ```
+
+!!!! Important !!!!!
+So there's a list of instances kept at FLT_FILTER->InstanceList.rList
+To get to the FLT_INSTANCE, you do `(FLT_INSTANCE)FLT_FILTER->InstanceList.rList.Flink-0x70`
