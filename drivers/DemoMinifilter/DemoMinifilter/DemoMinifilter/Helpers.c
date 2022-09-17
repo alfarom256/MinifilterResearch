@@ -3,14 +3,14 @@
 PVOID PatternSearch(PVOID pBegin, SIZE_T szMaxSearch, PUCHAR searchBytes, PUCHAR searchMask, SIZE_T szSearchBytes)
 {
 	PUCHAR pBeginIter = (PUCHAR)pBegin;
-	for (SIZE_T szIdx = 0 ; *(PUSHORT)pBeginIter != 0xc3cc && szIdx < szMaxSearch; szIdx++) {
-		for (SIZE_T i = 0; i < szSearchBytes; i++) {
-			if (searchMask[i] == 0) {
+	for (SIZE_T i = 0 ; *(PUSHORT)pBeginIter != 0xc3cc && i < szMaxSearch; i++) {
+		for (SIZE_T j = 0; j < szSearchBytes; j++) {
+			if (searchMask[j] == 0) {
 				continue;
-			} else if (pBeginIter[szIdx + i] != searchBytes[i]) {
+			} else if (pBeginIter[i + j] != searchBytes[j]) {
 				break;
-			} else if (i + 1 == szSearchBytes) {
-				return pBeginIter + szIdx;
+			} else if (j + 1 == szSearchBytes) {
+				return pBeginIter + i;
 			}
 		}
 	}
@@ -158,7 +158,39 @@ VOID PrintOperationsForFilter(PFLT_FILTER lpFilter)
 PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilterName, ULONG MajorFunction)
 {
 	DbgPrint("[QueryMinifilterMajorOperation] Searching for filter %wZ with major function 0x%x\n", lpFilterName, MajorFunction);
+		
+	PFLT_FILTER lpFilter = QueryMinifilter(lpFilterName);
+	if (!lpFilter) {
+		DbgPrint("Could not find filter with name %wZ\n", lpFilterName);
+		return NULL;
+	}
 
+	// if the names match
+	if (!RtlCompareUnicodeString(lpFilterName, &lpFilter->Name, TRUE)) {
+		FLT_OPERATION_REGISTRATION* Callbacks = lpFilter->Operations;
+
+		if (Callbacks == NULL) {
+			DbgPrint("\tCallbacks is NULL!\n");
+			return NULL; // if the callbacks are null there's nothing to return, so return NULL
+		}
+
+		// walk each of the callbacks until we find the major function we need
+		do {
+			if (Callbacks->MajorFunction == MajorFunction) {
+				return (PVOID)Callbacks;
+			}
+			Callbacks++;
+		} while (Callbacks->MajorFunction != IRP_MJ_OPERATION_END);
+
+	}
+	
+	// if the names match and we didn't find it, it's not supported by the filter (?)
+	// and we return NULL
+	return NULL;
+}
+
+PFLT_FILTER QueryMinifilter(PUNICODE_STRING lpFilterName)
+{
 	// get the globals
 	PVOID lpFltGlobals = FindFltGlobals();
 	if (!lpFltGlobals) {
@@ -182,23 +214,7 @@ PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilt
 
 		// if the names match
 		if (!RtlCompareUnicodeString(lpFilterName, &lpFilter->Name, TRUE)) {
-			FLT_OPERATION_REGISTRATION* Callbacks = lpFilter->Operations;
-
-			if (Callbacks == NULL) {
-				DbgPrint("\tCallbacks is NULL!\n");
-				return NULL; // if the callbacks are null there's nothing to return, so return NULL
-			}
-
-			// walk each of the callbacks until we find the major function we need
-			do {
-				if (Callbacks->MajorFunction == MajorFunction) {
-					return (PVOID)Callbacks;
-				}
-				Callbacks++;
-			} while (Callbacks->MajorFunction != IRP_MJ_OPERATION_END);
-			// if the names match and we didn't find it, it's not supported by the filter
-			// and we return NULL
-			return NULL;
+			return lpFilter;
 		}
 
 		// if the names don't match, continue on
@@ -207,5 +223,37 @@ PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilt
 	return NULL;
 }
 
+PLIST_ENTRY GetFilterInstanceList(PUNICODE_STRING lpFilterName)
+{
+	PFLT_FILTER lpFilter = QueryMinifilter(lpFilterName);
+	return &lpFilter->InstanceList.rList;
+}
+
 // get the filter
 // set the pointer to the callbacks to the element specifying IRP_MJ_OPERATION_END
+VOID BorkMinifilter(PUNICODE_STRING lpFilterName)
+{
+	PFLT_FILTER lpFilter = QueryMinifilter(lpFilterName);
+	if (!lpFilter) {
+		DbgPrint("[BorkMinifilter] Could not query minifilter\n");
+		return;
+	}
+
+	// first we get the list of instances
+	PLIST_ENTRY lpFilterInstanceIter = lpFilter->InstanceList.rList.Flink;
+	ULONG ulNumInstances = lpFilter->InstanceList.rCount;
+	DbgPrint("Found %d instances\n", ulNumInstances);
+
+	for (ULONG i = 0; i < ulNumInstances; i++) {
+		PFLT_INSTANCE lpFltInstance = (PFLT_INSTANCE)((SIZE_T)lpFilterInstanceIter - OFFSET_FLT_INSTANCE_LIST_ENTRY);
+		DbgPrint("Found instance at %p\n", lpFltInstance);
+		DbgPrint("Dumping callbacks\n");
+		for (ULONG j = 0; j < CONTEXT_LIST_MAX; j++) {
+			DbgPrint("\tCallbackNodes[%d] - %p\n", j, lpFltInstance->CallbackNodes[j]);
+		}
+
+		lpFilterInstanceIter = lpFilterInstanceIter->Flink;
+	}
+	return;
+}
+

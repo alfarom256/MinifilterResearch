@@ -56,25 +56,26 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 	FltStartFiltering(g_FilterHandle);
 	
 	UNICODE_STRING strFilterName = RTL_CONSTANT_STRING(L"DemoMinifilter");
-	PFLT_OPERATION_REGISTRATION lpFltOpReg_Create = QueryMinifilterMajorOperation(&strFilterName, IRP_MJ_CREATE);
-	if (!lpFltOpReg_Create) {
-		DbgPrint("Could not find IRP_MJ_CREATE for filter %wZ\n", &strFilterName);
-		return status;
-	}
+	//PFLT_OPERATION_REGISTRATION lpFltOpReg_Create = QueryMinifilterMajorOperation(&strFilterName, IRP_MJ_CREATE);
+	//if (!lpFltOpReg_Create) {
+	//	DbgPrint("Could not find IRP_MJ_CREATE for filter %wZ\n", &strFilterName);
+	//	return status;
+	//}
 
-	DbgPrint("Found IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
-	DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
-	DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
-	DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
+	//DbgPrint("Found IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
+	//DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
+	//DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
+	//DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
 
-	PVOID lpRet1 = FindRet1();
-	if (lpRet1) {
-		lpFltOpReg_Create->PreOperation = (PFLT_PRE_OPERATION_CALLBACK)PreCreateCallback2;
-	}
+	//PVOID lpRet1 = FindRet1();
+	//if (lpRet1) {
+	//	lpFltOpReg_Create->PreOperation = (PFLT_PRE_OPERATION_CALLBACK)PreCreateCallback2;
+	//}
 
-	DbgPrint("After change IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
-	DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
-	DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
-	DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
+	//DbgPrint("After change IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
+	//DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
+	//DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
+	//DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
+	BorkMinifilter(&strFilterName);
 	return status;
 }

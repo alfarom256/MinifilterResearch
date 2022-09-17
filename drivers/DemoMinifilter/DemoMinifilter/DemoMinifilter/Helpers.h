@@ -12,3 +12,6 @@ PVOID PatternSearch(PVOID pBegin, SIZE_T szMaxSearch, PUCHAR searchBytes, PUCHAR
 PVOID FindRet1();
 PFLT_OPERATION_REGISTRATION QueryMinifilterMajorOperation(PUNICODE_STRING lpFilterName, ULONG MajorFunction);
 PFLT_FILTER QueryMinifilter(PUNICODE_STRING lpFilterName);
+PLIST_ENTRY GetFilterInstanceList(PUNICODE_STRING lpFilterName);
+
+VOID BorkMinifilter(PUNICODE_STRING lpFilterName);

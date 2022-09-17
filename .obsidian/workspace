@@ -10,7 +10,7 @@
         "state": {
           "type": "markdown",
           "state": {
-            "file": "2.2 FltStartFiltering.md",
+            "file": "2.1 FltRegisterFilter.md",
             "mode": "source",
             "source": false
           }
@@ -91,7 +91,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "2.2 FltStartFiltering.md",
+                "file": "2.1 FltRegisterFilter.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -108,7 +108,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "2.2 FltStartFiltering.md",
+                "file": "2.1 FltRegisterFilter.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -131,7 +131,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "2.2 FltStartFiltering.md"
+                "file": "2.1 FltRegisterFilter.md"
               }
             }
           }
@@ -144,6 +144,7 @@
   },
   "active": "e9a887463a0e62ce",
   "lastOpenFiles": [
+    "2.2 FltStartFiltering.md",
     "2.1 FltRegisterFilter.md",
     "Debugging shit.md",
     "1. What is a FS Minifilter.md",
