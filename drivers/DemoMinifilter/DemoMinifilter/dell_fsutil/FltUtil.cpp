@@ -1,11 +1,20 @@
 #include "FltUtil.h"
 
-FltManager::FltManager() : lpFltMgrBase(ResolveFltmgrBase()), lpFltGlobals(ResolveFltmgrGlobals(lpFltMgrBase)), lpFltFrame0(0) {}
-
-
-FltManager::~FltManager()
+PFLT_FILTER GetFilterByName(const wchar_t* strFilterName)
 {
+	return PFLT_FILTER();
 }
+
+BOOL GetFilterOperationByMajorFn(PFLT_FILTER lpFilter, DWORD MajorFunction)
+{
+	return 0;
+}
+
+DWORD GetFrameCount()
+{
+	return 0;
+}
+
 
 PVOID FltManager::ResolveFltmgrBase()
 {
@@ -54,7 +63,7 @@ PVOID FltManager::ResolveFltmgrBase()
 	return lpBase;
 }
 
-inline PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
+PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 {
 	HMODULE hFltmgr = LoadLibraryExA(R"(C:\WINDOWS\System32\drivers\FLTMGR.SYS)", NULL, LOAD_LIBRARY_AS_IMAGE_RESOURCE);
 	if (!hFltmgr) {
@@ -95,17 +104,108 @@ inline PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 	return (PVOID)((SIZE_T)lpkFltEnumerateFilters + 7 + dwOffset - 0x58);
 }
 
-PFLT_FILTER GetFilterByName(const wchar_t* strFilterName)
+FltManager::FltManager(MemHandler* objMemHandlerArg)
 {
+
+	this->objMemHandler = objMemHandlerArg;
+	this->lpFltMgrBase = ResolveFltmgrBase();
+	this->lpFltGlobals = ResolveFltmgrGlobals(this->lpFltMgrBase);
+	bool b = this->objMemHandler->VirtualRead(
+		((SIZE_T)this->lpFltGlobals + FLTGLB_OFFSET_FLT_RESOURCE_LISTHEAD + FLT_RESOURCE_LISTHEAD_OFFSET_FRAME_COUNT),
+		&this->ulNumFrames,
+		sizeof(ULONG)
+	);
+	if (!b) {
+		puts("Could not read frame count");
+		return;
+	}
+
+	b = this->objMemHandler->VirtualRead(
+		((SIZE_T)this->lpFltGlobals + FLTGLB_OFFSET_FLT_RESOURCE_LISTHEAD + FLT_RESOURCE_LISTHEAD_OFFSET_FRAME_LIST),
+		&this->lpFltFrameList,
+		sizeof(PVOID)
+	);
+	if (!b) {
+		puts("Could not read frame list");
+		return;
+	}
+}
+
+PFLT_FILTER FltManager::GetFilterByName(const wchar_t* strFilterName)
+{
+	PVOID lpListHead = NULL;
+	PVOID lpFlink = NULL;
+	DWORD64 lpFltFrame = NULL;
+	ULONG ulFiltersInFrame = 0;
+
+	bool b = this->objMemHandler->VirtualRead(
+		(DWORD64)this->lpFltFrameList,
+		&lpListHead,
+		sizeof(PVOID)
+	);
+	if (!b) {
+		puts("Failed to read frame list head!");
+		return NULL;
+	}
+
+	printf("List of filters at - %p\n", lpListHead);
+
+	// for each frame
+	for (ULONG i = 0; i < this->ulNumFrames; i++) {
+		// read the flink
+		b = this->objMemHandler->VirtualRead(
+			(DWORD64)lpListHead,
+			&lpFlink,
+			sizeof(PVOID)
+		);
+		if (!b) {
+			puts("Failed to read frame list flink!");
+			return NULL;
+		}
+		// now that we've read the FLINK, subtract 0x8 to give us the adjusted _FLTP_FRAME*
+		lpFltFrame = (DWORD64)lpFlink - 0x8;
+		// now we need to read the number of filters associated with this frame
+
+		printf(
+			"Reading count of filters from %p\n", 
+			lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_COUNT
+		);
+
+		b = this->objMemHandler->VirtualRead(
+			lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_COUNT,
+			&ulFiltersInFrame,
+			sizeof(ULONG)
+		);
+		if (!b) {
+			puts("Failed to read filter count for frame!");
+			return NULL;
+		}
+		printf("Found %d filters for frame\n", ulFiltersInFrame);
+		for (ULONG j = 0; j < ulFiltersInFrame; j++) {
+			// read in the flink 
+			DWORD64 qwListIter = 0;
+			b = this->objMemHandler->VirtualRead(
+				lpFltFrame + +FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_FILTER_LISTHEAD,
+				&qwListIter,
+				sizeof(DWORD64)
+			);
+		}
+		// read the list of registered filters in the frame
+
+	}
 	return PFLT_FILTER();
 }
 
-BOOL GetFilterOperationByMajorFn(PFLT_FILTER lpFilter, DWORD MajorFunction)
+std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PFLT_FILTER lpFilter)
 {
-	return 0;
+	return std::vector<FLT_OPERATION_REGISTRATION>();
 }
 
-DWORD GetFrameCount()
+DWORD FltManager::GetFrameCount()
 {
-	return 0;
+	return this->ulNumFrames;
+}
+
+FltManager::~FltManager()
+{
 }

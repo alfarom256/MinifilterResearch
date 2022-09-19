@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <string>
+#include "MemHandler.h"
 
 // IOCTRL Codes for dbutil Driver Dispatch Methods
 #define IOCTL_VIRTUAL_READ			0x9B0C1EC4
@@ -15,7 +16,7 @@
 #define GARBAGE_VALUE				0xDEADBEEF
 
 
-class Memory {
+class Memory : public MemHandler {
 public:
 	HANDLE DriverHandle;
 
