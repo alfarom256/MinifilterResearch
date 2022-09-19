@@ -15,6 +15,12 @@
 #define FILTER_RESOUCE_LISTHEAD_OFFSET_COUNT 0x78
 #define FILTER_RESOUCE_LISTHEAD_OFFSET_FILTER_LISTHEAD 0x68
 
+#define FILTER_OFFSET_NAME 0x38
+#define FILTER_OFFSET_OPERATIONS 0x1a8
+
+#define UNISTR_OFFSET_LEN 0
+#define UNISTR_OFFSET_BUF 8
+
 
 class FltManager
 {
@@ -24,8 +30,8 @@ public:
 	PVOID lpFltMgrBase = { 0 };
 	PVOID lpFltGlobals = { 0 };
 	PVOID lpFltFrameList = { 0 };
-	PFLT_FILTER GetFilterByName(const wchar_t* strFilterName);
-	BOOL GetFilterOperationByMajorFn(PFLT_FILTER lpFilter, DWORD MajorFunction);
+	PVOID GetFilterByName(const wchar_t* strFilterName);
+	BOOL GetFilterOperationByMajorFn(PVOID lpFilter, DWORD MajorFunction);
 	std::vector<FLT_OPERATION_REGISTRATION> GetOperationsForFilter(PFLT_FILTER lpFilter);
 	DWORD GetFrameCount();
 

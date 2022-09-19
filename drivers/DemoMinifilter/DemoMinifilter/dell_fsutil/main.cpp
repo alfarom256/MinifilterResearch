@@ -8,6 +8,6 @@ int main() {
 	DWORD dwX = oFlt.GetFrameCount();
 	printf("Flt globals is at %p\n", oFlt.lpFltGlobals);
 	printf("%d frames available\n", dwX);
-	oFlt.GetFilterByName(L"");
+	PVOID lpFilter = oFlt.GetFilterByName(L"DemoMinifilter");
 	return 0;
 }

@@ -24,7 +24,7 @@
     <ClCompile Include="FltUtil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FltManager.cpp">
+    <ClCompile Include="MemHandler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,7 +38,7 @@
     <ClInclude Include="PebLdr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="FltManager.h">
+    <ClInclude Include="MemHandler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
