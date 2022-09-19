@@ -1,6 +1,13 @@
 #include "FltUtil.h"
 
-PVOID ResolveFltmgrBase()
+FltManager::FltManager() : lpFltMgrBase(ResolveFltmgrBase()), lpFltGlobals(ResolveFltmgrGlobals(lpFltMgrBase)), lpFltFrame0(0) {}
+
+
+FltManager::~FltManager()
+{
+}
+
+PVOID FltManager::ResolveFltmgrBase()
 {
 	DWORD szBuffer = 0x2000;
 	BOOL bRes = FALSE;
@@ -13,7 +20,7 @@ PVOID ResolveFltmgrBase()
 	}
 
 	LPVOID lpBuf = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, szBuffer);
-	if(!lpBuf){
+	if (!lpBuf) {
 		return NULL;
 	}
 
@@ -31,9 +38,9 @@ PVOID ResolveFltmgrBase()
 			return NULL;
 		}
 	}
-	
+
 	SIZE_T szNumDrivers = szBuffer / sizeof(PVOID);
-	
+
 	for (SIZE_T i = 0; i < szNumDrivers; i++) {
 		PVOID lpBaseIter = ((LPVOID*)lpBuf)[i];
 		GetDeviceDriverBaseNameW(lpBaseIter, buffer, 256);
@@ -47,7 +54,7 @@ PVOID ResolveFltmgrBase()
 	return lpBase;
 }
 
-PVOID ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
+inline PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 {
 	HMODULE hFltmgr = LoadLibraryExA(R"(C:\WINDOWS\System32\drivers\FLTMGR.SYS)", NULL, LOAD_LIBRARY_AS_IMAGE_RESOURCE);
 	if (!hFltmgr) {
@@ -72,7 +79,7 @@ PVOID ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 
 	for (SIZE_T i = 0; i < 0x200; i++) {
 		for (SIZE_T j = 0; j < 0x200 + j; j++) {
-		    if (lpFltEnumerateFilters[j + i] != ucharLoadFltGlobals[j]) {
+			if (lpFltEnumerateFilters[j + i] != ucharLoadFltGlobals[j]) {
 				break;
 			}
 			else if (j + 1 == sizeof(ucharLoadFltGlobals)) {

@@ -142,3 +142,72 @@ Callstack to PreCreateCallback:
 !!!! Important !!!!!
 So there's a list of instances kept at FLT_FILTER->InstanceList.rList
 To get to the FLT_INSTANCE, you do `(FLT_INSTANCE)FLT_FILTER->InstanceList.rList.Flink-0x70`
+
+
+!!! Important 2 !!!
+
+```
+kd> dt fltmgr!_GLOBALS
+   +0x000 DebugFlags       : Uint4B
+   +0x008 TraceFlags       : Uint8B
+   +0x010 GFlags           : Uint4B
+   +0x018 RegHandle        : Uint8B
+   +0x020 NumProcessors    : Uint4B
+   +0x024 CacheLineSize    : Uint4B
+   +0x028 AlignedInstanceTrackingListSize : Uint4B
+   +0x030 ControlDeviceObject : Ptr64 _DEVICE_OBJECT
+   +0x038 DriverObject     : Ptr64 _DRIVER_OBJECT
+   +0x040 KtmTransactionManagerHandle : Ptr64 Void
+   +0x048 TxVolKtmResourceManagerHandle : Ptr64 Void
+   +0x050 TxVolKtmResourceManager : Ptr64 _KRESOURCEMANAGER
+   +0x058 FrameList        : _FLT_RESOURCE_LIST_HEAD
+   +0x0d8 Phase2InitLock   : _FAST_MUTEX
+   +0x110 RegistryPath     : _UNICODE_STRING
+   +0x120 RegistryPathBuffer : [160] Wchar
+   +0x260 GlobalVolumeOperationLock : Ptr64 _EX_PUSH_LOCK_CACHE_AWARE_LEGACY
+   +0x268 FltpServerPortObjectType : Ptr64 _OBJECT_TYPE
+   +0x270 FltpCommunicationPortObjectType : Ptr64 _OBJECT_TYPE
+   +0x278 MsgDeviceObject  : Ptr64 _DEVICE_OBJECT
+   +0x280 ManualDeviceAttachTimer : Ptr64 _EX_TIMER
+   +0x288 ManualDeviceAttachWork : _WORK_QUEUE_ITEM
+   +0x2a8 ManualDeviceAttachLimit : Int4B
+   +0x2ac ManualAttachDelayCounter : Int4B
+   +0x2b0 FastManualAttachTimerPeriod : Uint4B
+   +0x2b4 ManualAttachTimerPeriod : Uint4B
+   +0x2b8 ManualAttachDelay : Uint4B
+   +0x2bc ManualAttachIgnoredDevices : UChar
+   +0x2bd ManualAttachOnlyOnceDevices : UChar
+   +0x2be ManualAttachFastAttachDevices : UChar
+   +0x2c0 TargetedIoCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x340 IoDeviceHintLookasideList : _PAGED_LOOKASIDE_LIST
+   +0x3c0 StreamListCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x440 FileListCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x4c0 NameCacheCreateCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x540 AsyncIoContextLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x5c0 WorkItemLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x640 NameControlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x6c0 OperationStatusCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x740 NameGenerationContextLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x7c0 FileLockLookasideList : _PAGED_LOOKASIDE_LIST
+   +0x840 TxnParameterBlockLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x8c0 TxCtxExtensionNPagedLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x940 TxVolCtxLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x9c0 TxVolStreamListCtrlEntryLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xa40 SectionListCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0xac0 SectionCtxExtensionLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0xb40 OpenReparseListLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xbc0 OpenReparseListEntryLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xc40 QueryOnCreateLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xcc0 FltpParameterOffsetTable : [28] <unnamed-tag>
+   +0xda0 ThrottledWorkCtrl : _THROTTLED_WORK_ITEM_CTRL
+   +0xdf0 LostItemDelayInSeconds : Uint4B
+   +0xdf8 VerifiedFiltersList : _LIST_ENTRY
+   +0xe08 VerifiedFiltersLock : Uint8B
+   +0xe10 VerifiedResourceLinkFailures : Int4B
+   +0xe14 VerifiedResourceUnlinkFailures : Int4B
+   +0xe18 PerfTraceRoutines : Ptr64 _WMI_FLTIO_NOTIFY_ROUTINES
+   +0xe20 DummyPerfTraceRoutines : _WMI_FLTIO_NOTIFY_ROUTINES
+   +0xe50 RenameCounter    : _LARGE_INTEGER
+   +0xe58 FilterSupportedFeaturesMode : Int4B
+   +0xe60 InitialRundownSize : Uint8B
+```

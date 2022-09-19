@@ -3,9 +3,8 @@
 #include "FltUtil.h"
 
 int main() {
-	PVOID lpFltMgrBase = ResolveFltmgrBase();
-	PVOID lpFltGlobals = ResolveFltmgrGlobals(lpFltMgrBase);
-	printf("Flt globals is at %p\n", lpFltGlobals);
+	FltManager oFlt = FltManager();
+	printf("Flt globals is at %p\n", oFlt.lpFltGlobals);
 	getchar();
 	return 0;
 }

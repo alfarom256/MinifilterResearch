@@ -141,11 +141,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FltManager.cpp" />
     <ClCompile Include="FltUtil.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="memory.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="FltManager.h" />
     <ClInclude Include="FltUtil.h" />
     <ClInclude Include="memory.h" />
     <ClInclude Include="PebLdr.h" />
