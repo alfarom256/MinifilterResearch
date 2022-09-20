@@ -8,6 +8,8 @@
 #include <Windows.h>
 #include <winternl.h>
 
+#define IRP_MJ_OPERATION_END 0x80
+
 typedef struct _OWNER_ENTRY {
 	DWORD64 OwnerThread;
 	DWORD64 TableSize;

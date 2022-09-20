@@ -251,7 +251,7 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 			// compare it to our desired filter
 
 			if (!lstrcmpiW(buf, strFilterName)) {
-				printf("Found target filter at %llx\n", lpFilter);
+				printf("\nFound target filter at %llx\n", lpFilter);
 				return (PVOID)lpFilter;
 			}
 
@@ -280,14 +280,43 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 	return NULL;
 }
 
-BOOL FltManager::GetFilterOperationByMajorFn(PVOID lpFilter, DWORD MajorFunction)
+std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID lpFilter)
 {
-	return 0;
-}
+	std::vector<FLT_OPERATION_REGISTRATION> retVec = std::vector<FLT_OPERATION_REGISTRATION>();
+	if (!lpFilter) {
+		puts("lpFilter is NULL!");
+		return retVec;
+	}
 
-std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PFLT_FILTER lpFilter)
-{
-	return std::vector<FLT_OPERATION_REGISTRATION>();
+	DWORD64 qwOperationRegIter = 0;
+	DWORD64 qwOperationRegPtr = 0;
+
+	// first we read the pointer to the table of FLT_OPERATION_REGISTRATION
+	bool b = this->objMemHandler->VirtualRead(
+		(DWORD64)lpFilter + FILTER_OFFSET_OPERATIONS,
+		&qwOperationRegPtr, 
+		sizeof(DWORD64)
+	);
+
+	printf("Operations at %llx\n", qwOperationRegPtr);
+	while (TRUE) {
+		FLT_OPERATION_REGISTRATION* fltIter = new FLT_OPERATION_REGISTRATION();
+		b = this->objMemHandler->VirtualRead(
+			qwOperationRegPtr,
+			fltIter,
+			sizeof(FLT_OPERATION_REGISTRATION)
+		);
+		
+		// read until we get IRP_MJ_OPERATION_END
+		if (fltIter->MajorFunction == IRP_MJ_OPERATION_END) {
+			break;
+		}
+		retVec.push_back(*fltIter);
+		qwOperationRegPtr += sizeof(FLT_OPERATION_REGISTRATION);
+
+	}
+
+	return retVec;
 }
 
 DWORD FltManager::GetFrameCount()
