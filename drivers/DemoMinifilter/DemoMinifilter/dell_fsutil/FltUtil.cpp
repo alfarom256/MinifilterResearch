@@ -276,7 +276,7 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 		// read the list of registered filters in the frame
 
 	}
-	printf("Failed to find filter matching name %S\n", strFilterName);
+	printf("\nFailed to find filter matching name %S\n", strFilterName);
 	return NULL;
 }
 
@@ -332,14 +332,83 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 	return retVec;
 }
 
-std::vector<wchar_t*> FltManager::EnumFrameVolumes(LPVOID lpFrame)
+std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 {
-	return std::vector<wchar_t*>();
+	ULONG ulNumVolumes = 0;
+	DWORD64 qwListIter = 0;
+
+	std::unordered_map<wchar_t*, PVOID> retVal;
+
+	// first we read the count of volumes
+	bool b = this->objMemHandler->VirtualRead(
+		(DWORD64)lpFrame + FRAME_OFFSET_VOLUME_LIST + VOLUME_LIST_OFFSET_COUNT,
+		&ulNumVolumes,
+		sizeof(ULONG)
+	);
+
+	printf("Found %d attached volumes for frame %p\n", ulNumVolumes, lpFrame);
+
+	// read the list head
+	b = this->objMemHandler->VirtualRead(
+		(DWORD64)lpFrame + FRAME_OFFSET_VOLUME_LIST + VOLUME_LIST_OFFSET_LIST,
+		&qwListIter,
+		sizeof(DWORD64)
+	);
+
+	for (ULONG i = 0; i < ulNumVolumes; i++) {
+		DWORD64 lpVolume = qwListIter - 0x10;
+		DWORD64 lpBuffer = lpVolume + VOLUME_OFFSET_DEVICE_NAME + UNISTR_OFFSET_BUF;
+		DWORD64 lpBufferLen = lpVolume + VOLUME_OFFSET_DEVICE_NAME + UNISTR_OFFSET_LEN;
+		DWORD64 lpBufferPtr = 0;
+		ULONG ulDeviceNameLen = 0;
+
+		// read the string length first
+		b = this->objMemHandler->VirtualRead(
+			lpBufferLen,
+			&ulDeviceNameLen,
+			sizeof(USHORT)
+		);
+
+		// read the pointer to the buffer
+		b = this->objMemHandler->VirtualRead(
+			lpBuffer,
+			&lpBufferPtr,
+			sizeof(DWORD64)
+		);
+
+
+		// then read the actual buffer
+		wchar_t* buf = new wchar_t[(SIZE_T)ulDeviceNameLen + 2];
+		memset(buf, 0, (SIZE_T)ulDeviceNameLen + 2);
+
+		b = this->objMemHandler->VirtualRead(
+			lpBufferPtr,
+			buf,
+			ulDeviceNameLen
+		);
+
+		retVal[buf] = (PVOID)lpVolume;
+
+		printf("%d\t%S\n", i, buf);
+
+		// go to the next link
+		b = this->objMemHandler->VirtualRead(
+			(DWORD64)qwListIter,
+			&qwListIter,
+			sizeof(DWORD64)
+		);
+	}
+	return retVal;
 }
 
 DWORD FltManager::GetFrameCount()
 {
 	return this->ulNumFrames;
+}
+
+BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes)
+{
+	return 0;
 }
 
 FltManager::~FltManager()

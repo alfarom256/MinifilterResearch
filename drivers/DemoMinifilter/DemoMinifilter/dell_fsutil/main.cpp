@@ -21,6 +21,11 @@ int main(int argc, char** argv) {
 	printf("Frame list is at %p\n", oFlt.lpFltFrameList);
 	
 	PVOID lpFilter = oFlt.GetFilterByName(wstrFilterName);
+	if (!lpFilter) {
+		puts("Target filter not found, exiting...");
+		exit(-1);
+	}
+
 
 	PVOID lpFrame = oFlt.GetFrameForFilter(lpFilter);
 	printf("Frame for filter is at %p\n", lpFrame);
@@ -30,5 +35,17 @@ int main(int argc, char** argv) {
 		const char* strOperation = g_IrpMjMap.count((BYTE)a.MajorFunction) ?  g_IrpMjMap[(BYTE)a.MajorFunction] : "IRP_MJ_UNDEFINED";
 		printf("MajorFn: %s\nPre: %p\nPost %p\n", strOperation, a.PreOperation, a.PostOperation);
 	}
+
+	auto frameVolumes = oFlt.EnumFrameVolumes(lpFrame);
+	const wchar_t* strHardDiskPrefix = LR"(\Device\HarddiskVolume)";
+
+	auto count = std::_Erase_nodes_if(frameVolumes, [strHardDiskPrefix](const auto& it) {
+		return wcsncmp(it.first, strHardDiskPrefix, lstrlenW(strHardDiskPrefix)) != 0;
+	});
+	for (auto x : frameVolumes) {
+		printf("Retained target volume : %S - %p\n", x.first, x.second);
+	}
+	
+
 	return 0;
 }

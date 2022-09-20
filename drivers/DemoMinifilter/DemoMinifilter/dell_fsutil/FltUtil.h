@@ -24,6 +24,12 @@
 #define FILTER_INSTANCELIST_OFFSET_INSTANCES_COUNT 0x78
 #define FILTER_INSTANCELIST_OFFSET_INSTANCES_LIST 0x68
 
+#define FRAME_OFFSET_VOLUME_LIST 0xc8
+#define VOLUME_LIST_OFFSET_COUNT 0x78
+#define VOLUME_LIST_OFFSET_LIST 0x68
+
+#define VOLUME_OFFSET_DEVICE_NAME 0x60
+
 #define UNISTR_OFFSET_LEN 0
 #define UNISTR_OFFSET_BUF 8
 
@@ -40,8 +46,9 @@ public:
 	PVOID GetFrameForFilter(LPVOID lpFilter);
 	std::vector<FLT_OPERATION_REGISTRATION> GetOperationsForFilter(PVOID lpFilter);
 	PVOID FindRet1();
-	std::vector<wchar_t*> EnumFrameVolumes(LPVOID lpFrame);
+	std::unordered_map<wchar_t*, PVOID> EnumFrameVolumes(LPVOID lpFrame);
 	DWORD GetFrameCount();
+	BOOL RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes);
 
 private:
 	ULONG ulNumFrames;

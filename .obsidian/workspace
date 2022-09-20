@@ -10,7 +10,7 @@
         "state": {
           "type": "markdown",
           "state": {
-            "file": "Translating IRP_MJ To Callback Node.md",
+            "file": "Debugging shit.md",
             "mode": "source",
             "source": false
           }
@@ -91,7 +91,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Translating IRP_MJ To Callback Node.md",
+                "file": "Debugging shit.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -108,7 +108,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Translating IRP_MJ To Callback Node.md",
+                "file": "Debugging shit.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -131,7 +131,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Translating IRP_MJ To Callback Node.md"
+                "file": "Debugging shit.md"
               }
             }
           }
@@ -144,6 +144,7 @@
   },
   "active": "e9a887463a0e62ce",
   "lastOpenFiles": [
+    "Translating IRP_MJ To Callback Node.md",
     "2.1 FltRegisterFilter.md",
     "2.2 FltStartFiltering.md",
     "Debugging shit.md",
@@ -152,7 +153,6 @@
     "1.1 Writing a file system minifilter.md",
     "3. Fltmgr.sys internals.md",
     "5 Exploitation.md",
-    "Goals for Minifilter.md",
-    "0.0 Layout.md"
+    "Goals for Minifilter.md"
   ]
 }
