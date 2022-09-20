@@ -37,8 +37,10 @@ public:
 	PVOID lpFltGlobals = { 0 };
 	PVOID lpFltFrameList = { 0 };
 	PVOID GetFilterByName(const wchar_t* strFilterName);
+	PVOID GetFrameForFilter(LPVOID lpFilter);
 	std::vector<FLT_OPERATION_REGISTRATION> GetOperationsForFilter(PVOID lpFilter);
-	VOID FindCallbackIndexForFilterInstances(PVOID lpFilter, std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations);
+	PVOID FindRet1();
+	std::vector<wchar_t*> EnumFrameVolumes(LPVOID lpFrame);
 	DWORD GetFrameCount();
 
 private:

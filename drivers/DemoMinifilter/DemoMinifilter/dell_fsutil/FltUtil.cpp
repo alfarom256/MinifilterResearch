@@ -280,6 +280,19 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 	return NULL;
 }
 
+PVOID FltManager::GetFrameForFilter(LPVOID lpFilter)
+{
+	PVOID lpFrame = NULL;
+
+	bool b = this->objMemHandler->VirtualRead(
+		(DWORD64)lpFilter + 0x30,
+		&lpFrame,
+		sizeof(PVOID)
+	);
+
+	return lpFrame;
+}
+
 std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID lpFilter)
 {
 	std::vector<FLT_OPERATION_REGISTRATION> retVec = std::vector<FLT_OPERATION_REGISTRATION>();
@@ -317,6 +330,11 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 	}
 
 	return retVec;
+}
+
+std::vector<wchar_t*> FltManager::EnumFrameVolumes(LPVOID lpFrame)
+{
+	return std::vector<wchar_t*>();
 }
 
 DWORD FltManager::GetFrameCount()

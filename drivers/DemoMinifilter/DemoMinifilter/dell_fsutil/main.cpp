@@ -18,7 +18,13 @@ int main(int argc, char** argv) {
 	DWORD dwX = oFlt.GetFrameCount();
 	printf("Flt globals is at %p\n", oFlt.lpFltGlobals);
 	printf("%d frames available\n", dwX);
+	printf("Frame list is at %p\n", oFlt.lpFltFrameList);
+	
 	PVOID lpFilter = oFlt.GetFilterByName(wstrFilterName);
+
+	PVOID lpFrame = oFlt.GetFrameForFilter(lpFilter);
+	printf("Frame for filter is at %p\n", lpFrame);
+
 	auto x = oFlt.GetOperationsForFilter(lpFilter);
 	for (auto a : x) {
 		const char* strOperation = g_IrpMjMap.count((BYTE)a.MajorFunction) ?  g_IrpMjMap[(BYTE)a.MajorFunction] : "IRP_MJ_UNDEFINED";
