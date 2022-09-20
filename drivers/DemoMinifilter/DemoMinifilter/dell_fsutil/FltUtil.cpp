@@ -332,6 +332,11 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 	return retVec;
 }
 
+PVOID FltManager::FindRet1()
+{
+	return PVOID();
+}
+
 std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 {
 	ULONG ulNumVolumes = 0;
@@ -408,6 +413,84 @@ DWORD FltManager::GetFrameCount()
 
 BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes)
 {
+	for (const FLT_OPERATION_REGISTRATION &op : vecTargetOperations) {
+		// FltpSetCallbacksForInstance
+		/*
+			while ( lpFilterOperations->MajorFunction != 0x80 && dwNumCallbackNodes )
+			{
+				if ( (unsigned __int8)(lpFilterOperations->MajorFunction + 20) > 1u
+					&& (lpFilterOperations->PreOperation || lpFilterOperations->PostOperation) )
+				{
+					v10 = lpFilterOperations->MajorFunction + 22;// index into the callback node array
+					if ( v10 < 0x32u )
+					{
+					if ( *(_QWORD *)(lpPoolWithTag + 8i64 * v10 + 160) )
+					{
+						ExReleaseCacheAwarePushLockSharedEx(v9, 0i64);
+						KeLeaveGuardedRegion();
+						return 3223060493i64;
+					}
+					FltpInitializeCallbackNode(
+						(unsigned int)lpPoolWithTagOffset0x230,
+						(_FLT_OPERATION_REGISTRATION *)(_DWORD)lpFilterOperations,
+						0i64,
+						0i64,
+						0i64,
+						0i64,
+						lpPoolWithTag,
+						v10);
+					lpPoolWithTagOffset0x230 += 48i64;      // called for demominifilter
+															// 
+					--dwNumCallbackNodes;
+					}
+				}
+				++lpFilterOperations;
+			}
+		*/
+		UCHAR index = (UCHAR)op.MajorFunction + 22;
+
+		// read the pointer to the volume's callback table
+		for (auto& vol : mapTargetVolumes) {
+			if (index > 50) {
+				printf("Skipping non-indexed adjusted major fn - %d", index);
+				continue;
+			}
+
+			DWORD64 lpTargetCallbackListEntryPtr = (DWORD64)vol.second + VOLUME_OFFSET_CALLBACK_TBL + (index * 0x10);
+			printf("==== MajFn - %d ListEntryPtr - %llx ====\n", index, lpTargetCallbackListEntryPtr);
+			DWORD64 lpListHead = 0;
+			DWORD64 lpListIter = 0;
+
+			bool b = this->objMemHandler->VirtualRead(
+				lpTargetCallbackListEntryPtr,
+				&lpListHead,
+				sizeof(DWORD64)
+			);
+
+			lpListIter = lpListHead;
+			do {
+				// read in the preop
+				DWORD64 lpPreOp = 0;
+				bool b = this->objMemHandler->VirtualRead(
+					lpListIter + CALLBACK_NODE_OFFSET_PREOP,
+					&lpPreOp,
+					sizeof(DWORD64)
+				);
+
+				if (lpPreOp == (DWORD64)op.PreOperation) {
+					printf("\tVol %S\n\tPreOp %llx\n\tCallbackNodePtr %llx\n", vol.first, op.PreOperation, lpListIter + CALLBACK_NODE_OFFSET_PREOP);
+				}
+
+				// read the next FLINK
+				b = this->objMemHandler->VirtualRead(
+					lpListIter,
+					&lpListIter,
+					sizeof(DWORD64)
+				);
+			} while (lpListIter != lpListHead);
+
+		}
+	}
 	return 0;
 }
 

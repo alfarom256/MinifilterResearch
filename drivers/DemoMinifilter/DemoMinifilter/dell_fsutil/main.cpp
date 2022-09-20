@@ -30,10 +30,10 @@ int main(int argc, char** argv) {
 	PVOID lpFrame = oFlt.GetFrameForFilter(lpFilter);
 	printf("Frame for filter is at %p\n", lpFrame);
 
-	auto x = oFlt.GetOperationsForFilter(lpFilter);
-	for (auto a : x) {
-		const char* strOperation = g_IrpMjMap.count((BYTE)a.MajorFunction) ?  g_IrpMjMap[(BYTE)a.MajorFunction] : "IRP_MJ_UNDEFINED";
-		printf("MajorFn: %s\nPre: %p\nPost %p\n", strOperation, a.PreOperation, a.PostOperation);
+	auto vecOperations = oFlt.GetOperationsForFilter(lpFilter);
+	for (auto op : vecOperations) {
+		const char* strOperation = g_IrpMjMap.count((BYTE)op.MajorFunction) ?  g_IrpMjMap[(BYTE)op.MajorFunction] : "IRP_MJ_UNDEFINED";
+		printf("MajorFn: %s\nPre: %p\nPost %p\n", strOperation, op.PreOperation, op.PostOperation);
 	}
 
 	auto frameVolumes = oFlt.EnumFrameVolumes(lpFrame);
@@ -46,6 +46,7 @@ int main(int argc, char** argv) {
 		printf("Retained target volume : %S - %p\n", x.first, x.second);
 	}
 	
+	BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes);
 
 	return 0;
 }
