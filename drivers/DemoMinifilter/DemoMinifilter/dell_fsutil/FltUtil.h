@@ -19,6 +19,10 @@
 
 #define FILTER_OFFSET_NAME 0x38
 #define FILTER_OFFSET_OPERATIONS 0x1a8
+#define FILTER_OFFSET_INSTANCELIST 0x68
+
+#define FILTER_INSTANCELIST_OFFSET_INSTANCES_COUNT 0x78
+#define FILTER_INSTANCELIST_OFFSET_INSTANCES_LIST 0x68
 
 #define UNISTR_OFFSET_LEN 0
 #define UNISTR_OFFSET_BUF 8
@@ -34,6 +38,7 @@ public:
 	PVOID lpFltFrameList = { 0 };
 	PVOID GetFilterByName(const wchar_t* strFilterName);
 	std::vector<FLT_OPERATION_REGISTRATION> GetOperationsForFilter(PVOID lpFilter);
+	VOID FindCallbackIndexForFilterInstances(PVOID lpFilter, std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations);
 	DWORD GetFrameCount();
 
 private:
