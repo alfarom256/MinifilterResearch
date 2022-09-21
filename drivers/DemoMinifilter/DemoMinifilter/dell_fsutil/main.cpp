@@ -39,12 +39,12 @@ int main(int argc, char** argv) {
 	auto frameVolumes = oFlt.EnumFrameVolumes(lpFrame);
 	const wchar_t* strHardDiskPrefix = LR"(\Device\HarddiskVolume)";
 
-	auto count = std::_Erase_nodes_if(frameVolumes, [strHardDiskPrefix](const auto& it) {
+	/*auto count = std::_Erase_nodes_if(frameVolumes, [strHardDiskPrefix](const auto& it) {
 		return wcsncmp(it.first, strHardDiskPrefix, lstrlenW(strHardDiskPrefix)) != 0;
 	});
 	for (auto x : frameVolumes) {
 		printf("Retained target volume : %S - %p\n", x.first, x.second);
-	}
+	}*/
 	
 	BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes);
 
