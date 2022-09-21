@@ -9,6 +9,7 @@ FLT_PREOP_CALLBACK_STATUS PreCreateCallback(PFLT_CALLBACK_DATA lpFltCallbackData
     PFILE_OBJECT lpFileObject = lpFltRelatedObj->FileObject;
     PUNICODE_STRING lpFileName = &lpFileObject->FileName;
 
+    // desktop\test.txt
     if (RtlCompareUnicodeString(&g_TargetFileName, lpFileName, TRUE) == 0) {
         HANDLE hPid = PsGetCurrentProcessId();
         DbgPrint("[DEMOFLT] PID %p - Create - %wZ\n", hPid, lpFileName);

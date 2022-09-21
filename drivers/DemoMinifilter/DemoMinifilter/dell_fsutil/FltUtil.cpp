@@ -468,7 +468,9 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 			);
 
 			lpListIter = lpListHead;
+			printf("LISTHEAD - %llx\n", lpListHead);
 			do {
+				printf("ITER - %llx\n", lpListIter);
 				// read in the preop
 				DWORD64 lpPreOp = 0;
 				bool b = this->objMemHandler->VirtualRead(
@@ -478,14 +480,44 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 				);
 
 				if (lpPreOp == (DWORD64)op.PreOperation) {
-					DWORD64 lpRet1 = 0xfffff8042f3caab8;
-					printf("\tVol %S\n\tPreOp %llx\n\tCallbackNodePtr %llx\n", vol.first, op.PreOperation, lpListIter + CALLBACK_NODE_OFFSET_PREOP);
-					b = this->objMemHandler->VirtualWrite(
-						lpListIter + CALLBACK_NODE_OFFSET_PREOP,
-						&lpRet1,
+					DWORD64 lpPreviousNode = 0;
+					DWORD64 lpNextNode = 0;
+
+					// read this node's BLINK
+					this->objMemHandler->VirtualRead(
+						lpListIter + 0x8,
+						&lpPreviousNode,
+						sizeof(DWORD64)
+					);
+
+					// read this node's FLINK
+					this->objMemHandler->VirtualRead(
+						lpListIter,
+						&lpNextNode,
+						sizeof(DWORD64)
+					);
+
+					// write previous node's FLINK 
+					this->objMemHandler->VirtualWrite(
+						lpPreviousNode,
+						&lpNextNode,
+						sizeof(DWORD64)
+					);
+
+					// write the next node's BLINK
+					this->objMemHandler->VirtualWrite(
+						lpNextNode + 0x8,
+						&lpPreviousNode,
 						sizeof(DWORD64)
 					);
 					puts("\t++ Patched callback! ++");
+
+					// if we're patching the list head
+					if (lpListIter == lpListHead) {
+						// set the list head to the previous node to prevent a loop
+						lpListHead = lpPreviousNode;
+					}
+
 				}
 
 				// read the next FLINK
