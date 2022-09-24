@@ -55,7 +55,7 @@ public:
 
 private:
 	ULONG ulNumFrames;
-	PVOID ResolveFltmgrBase();
+	PVOID ResolveDriverBase(const wchar_t* strDriverName);
 	PVOID ResolveFltmgrGlobals(LPVOID lpkFltMgrBase);
 	MemHandler* objMemHandler;
 

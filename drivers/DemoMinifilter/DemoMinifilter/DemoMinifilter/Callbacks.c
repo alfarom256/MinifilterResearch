@@ -15,7 +15,7 @@ FLT_PREOP_CALLBACK_STATUS PreCreateCallback(PFLT_CALLBACK_DATA lpFltCallbackData
         DbgPrint("[DEMOFLT] PID %p - Create - %wZ\n", hPid, lpFileName);
         //DbgBreakPoint();
     }
-
+    
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 

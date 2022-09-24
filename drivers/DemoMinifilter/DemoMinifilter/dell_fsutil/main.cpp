@@ -7,6 +7,7 @@ int main(int argc, char** argv) {
 		puts("Useage: dell_fsutil.exe <FILTER_NAME>");
 		return -1;
 	}
+
 	char* strFilterName = argv[1];
 	wchar_t* wstrFilterName = new wchar_t[strlen(strFilterName) + 2];
 	size_t numConv = 0;
@@ -46,7 +47,7 @@ int main(int argc, char** argv) {
 		printf("Retained target volume : %S - %p\n", x.first, x.second);
 	}*/
 	
-	BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes);
+	//BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes);
 
 	return 0;
 }
