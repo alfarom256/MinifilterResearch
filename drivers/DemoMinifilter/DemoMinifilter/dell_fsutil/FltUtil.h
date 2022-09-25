@@ -51,7 +51,7 @@ public:
 	PVOID FindRet1();
 	std::unordered_map<wchar_t*, PVOID> EnumFrameVolumes(LPVOID lpFrame);
 	DWORD GetFrameCount();
-	BOOL RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes);
+	BOOL RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, LPVOID lpFunctionTarget);
 
 private:
 	ULONG ulNumFrames;
