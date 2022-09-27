@@ -53,7 +53,7 @@ The minifilter's Altitude describes it's load order. For example, a minifilter w
  ┌──────────────────────┐
  │                      │
  │     I/O Manager      │            ┌───────────────────┐
- │                      │            │  Minifilter0:     │
+ │                      │            │  Minifilter2:     │
  └───────────┬──────────┘     ┌──────►  Altitude 42000   │
              │                │      │                   │
              │                │      └───────────────────┘
@@ -65,7 +65,7 @@ The minifilter's Altitude describes it's load order. For example, a minifilter w
  └───────────┬──────────┘     │      └───────────────────┘
              │                │                
              │                │      ┌───────────────────┐
-             │                │      │  Minifilter2:     │
+             │                │      │  Minifilter0:     │
              │                └──────►  Altitude 30000   │
  ┌───────────▼──────────┐            │                   │
  │                      │            └───────────────────┘
@@ -79,8 +79,111 @@ The minifilter's Altitude describes it's load order. For example, a minifilter w
 ```
 Simplified version of: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
-#### Frame
-Frames do cool stuff
+#### Frame (`_FLTP_FRAME`)
+Frames describe a range of Altitudes, and the mini filters associated with them.
+
+```
+┌───────────────────┐
+│                   │
+│    I/O Manager    │
+│                   │           ┌──────────────────┐
+└─────────┬─────────┘           │                  │
+          │                ┌────►  Minifilter3     │
+┌─────────▼─────────┐      │    │                  │
+│                   ◄──────┘    └──────────────────┘
+│     Frame 1       │
+│                   ◄──────┐    ┌──────────────────┐
+└─────────┬─────────┘      │    │                  │
+          │                └────►  Minifilter2     │
+┌─────────▼─────────┐           │                  │
+│                   │           └──────────────────┘
+│   Legacy Filter   │
+│                   │           ┌──────────────────┐
+└─────────┬─────────┘           │                  │
+          │                ┌────►  Minifilter1     │
+┌─────────▼─────────┐      │    │                  │
+│                   ◄──────┘    └──────────────────┘
+│     Frame 0       │
+│                   ◄──────┐    ┌──────────────────┐
+└─────────┬─────────┘      │    │                  │
+          │                └────►  Minifilter0     │
+┌─────────▼─────────┐           │                  │
+│                   │           └──────────────────┘
+│       NTFS        │
+│                   │
+└───────────────────┘
+```
+
+```
+           _FLT_FRAME
+                │
+                │
+        ┌───────▼─────────────────────────────────────────────────┐
+        │                                                         │
+        │  Type: _FLT_TYPE                                        │
+        │  Links: _LIST_ENTRY                                     │
+        │  FrameID: 0                                             │
+        │  AltitudeIntervalLow: "0"                               │
+        │  AltitudeIntervalHigh: "409500"                         │
+        │  ...                                                    │
+   ┌────┼─ RegisteredFilters: _FLT_RESOURCE_LIST_HEAD             │
+┌──┼────┤  AttachedVolumes: _FLT_RESOURCE_LIST_HEAD               │
+│  │    │  ...                                                    │
+│  │    └─────────────────────────────────────────────────────────┘
+│  │
+│  │     _FLT_RESOURCE_LIST_HEAD (Filters)
+│  │    ┌─────────────────────┐
+│  └────► rLock: _ERESOURCE   │            ┌───────────────┐
+│       │ rList: _LIST_ENTRY  ├────────────► FLT_FILTER 0  ◄─────┐
+│       │ Count: 0xb          │            └───────┬───────┘     │
+│       └─────────────────────┘                    │             │
+│                                          ┌───────▼───────┐     │
+│                                          │ FLT_FILTER 1  │     │
+│                                          └───────┬───────┘     │
+│                                                  │             │
+│                                          ┌───────▼───────┐     │
+│                                          │ FLT_FILTER 2  │     │
+│                                          └───────┬───────┘     │
+│                                                  │             │
+│                                          ┌───────▼───────┐     │
+│                                          │ FLT_FILTER 3  ├─────┘
+│                                          └───────────────┘
+│
+│
+│
+│
+│        _FLT_RESOURCE_LIST_HEAD (Volumes)
+│       ┌──────────────────────────┐
+└───────► rLock: _ERESOURCE        │
+        │ rList: _LIST_ENTRY ───┐  │
+        │ Count: 0xb            │  │
+        └───────────────────────┼──┘
+                                │
+                                │
+                                │
+                                │
+                _FLT_VOLUME     │
+                ┌───────────────▼──────────────────────────┐
+                │ \Device\Mup                              │
+                │ Callbacks: _CALLBACK_CTRL                ◄───────┐
+                │ InstanceList: _FLT_RESOURCE_LIST_HEAD    │       │
+                │                                          │       │
+                └───────────────┬──────────────────────────┘       │
+                                │                                  │
+                _FLT_VOLUME     │                                  │
+                ┌───────────────▼──────────────────────────┐       │
+                │ \Device\HarddiskVolume4                  │       │
+                │ Callbacks: _CALLBACK_CTRL                │       │
+                │ InstanceList: _FLT_RESOURCE_LIST_HEAD    │       │
+                │                                          │       │
+                └───────────────┬──────────────────────────┘       │
+                                │                                  │
+                ┌───────────────▼──────────────────────────┐       │
+                │                                          │       │
+                │        ... The rest of the list ...      ├───────┘
+                │                                          │
+                └──────────────────────────────────────────┘
+```
 
 ```
 kd> dt FLTMGR!_FLTP_FRAME

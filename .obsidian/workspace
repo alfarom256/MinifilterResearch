@@ -146,13 +146,13 @@
   "lastOpenFiles": [
     "0.0 Layout.md",
     "Write-up.md",
-    "1. What is a FS Minifilter.md",
+    "Frame KDBG.md",
     "2.1 FltRegisterFilter.md",
+    "1. What is a FS Minifilter.md",
     "2.2 FltStartFiltering.md",
     "3. Fltmgr.sys internals.md",
     "FltCreateCommunicationPort.md",
     "Linked list manip bsod.md",
-    "1.2 Tracing a call from CreateFile to a Minifilter.md",
-    "1.1 Writing a file system minifilter.md"
+    "1.2 Tracing a call from CreateFile to a Minifilter.md"
   ]
 }
