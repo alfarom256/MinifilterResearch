@@ -323,13 +323,15 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 				delete[] buf;
 				return NULL;
 			}
-			printf("\t\nFilter %d - %S", j, buf);
-			// compare it to our desired filter
 
+			// compare it to our desired filter
 			if (!lstrcmpiW(buf, strFilterName)) {
-				printf("\nFound target filter at %llx\n", lpFilter);
+				printf("\nFound target filter %S at %llx\n", buf, lpFilter);
 				return (PVOID)lpFilter;
 			}
+
+			// free the buffer 
+			delete[] buf;
 
 			// read in the next flink
 			b = this->objMemHandler->VirtualRead(
@@ -338,16 +340,11 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 				sizeof(DWORD64)
 			);
 
-
 			if (!b) {
 				puts("Failed to read next flink!");
-				delete[] buf;
 				return NULL;
 			}
-			
-
-			// free the buffer 
-			delete[] buf;
+						
 		}
 		// read the list of registered filters in the frame
 
