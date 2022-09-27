@@ -6,11 +6,11 @@
       {
         "id": "e9a887463a0e62ce",
         "type": "leaf",
-        "dimension": 83.79870129870129,
+        "dimension": 40.84415584415584,
         "state": {
           "type": "markdown",
           "state": {
-            "file": "2.1 FltRegisterFilter.md",
+            "file": "Write-up.md",
             "mode": "source",
             "source": false
           }
@@ -19,7 +19,7 @@
       {
         "id": "f2750f8a43419a6a",
         "type": "leaf",
-        "dimension": 16.201298701298704,
+        "dimension": 59.15584415584415,
         "state": {
           "type": "markdown",
           "state": {
@@ -91,7 +91,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "2.1 FltRegisterFilter.md",
+                "file": "Write-up.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -108,7 +108,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "2.1 FltRegisterFilter.md",
+                "file": "Write-up.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -131,7 +131,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "2.1 FltRegisterFilter.md"
+                "file": "Write-up.md"
               }
             }
           }
@@ -144,15 +144,15 @@
   },
   "active": "e9a887463a0e62ce",
   "lastOpenFiles": [
+    "0.0 Layout.md",
+    "Write-up.md",
+    "1. What is a FS Minifilter.md",
+    "2.1 FltRegisterFilter.md",
     "2.2 FltStartFiltering.md",
     "3. Fltmgr.sys internals.md",
     "FltCreateCommunicationPort.md",
     "Linked list manip bsod.md",
-    "2.1 FltRegisterFilter.md",
     "1.2 Tracing a call from CreateFile to a Minifilter.md",
-    "1.1 Writing a file system minifilter.md",
-    "Debugging shit.md",
-    "Translating IRP_MJ To Callback Node.md",
-    "1. What is a FS Minifilter.md"
+    "1.1 Writing a file system minifilter.md"
   ]
 }

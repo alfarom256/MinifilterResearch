@@ -47,7 +47,7 @@ As previously mentioned, minifilters "sit in-between" the I/O manager and the fi
 How do I know where in the "stack" my driver sits? 
 What path does an IRP take from the I/O manager to the filesystem driver?
 
-The minifilter's Altitude describes it's load order. For example, a minifilter with an altitude of "1000" will be loaded into the I/O stack before a minifilter with an altitude of "30100."
+The minifilter's Altitude describes it's load order. For example, a minifilter with an altitude of "30000" will be loaded into the I/O stack before a minifilter with an altitude of "30100."
 
 ```
  ┌──────────────────────┐
@@ -80,7 +80,35 @@ The minifilter's Altitude describes it's load order. For example, a minifilter w
 Simplified version of: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
 #### Frame
-Frames describe a range of Altitudes for mini-filters.
+Frames do cool stuff
+
+```
+kd> dt FLTMGR!_FLTP_FRAME
+   +0x000 Type             : _FLT_TYPE
+   +0x008 Links            : _LIST_ENTRY
+   +0x018 FrameID          : Uint4B
+   +0x020 AltitudeIntervalLow : _UNICODE_STRING
+   +0x030 AltitudeIntervalHigh : _UNICODE_STRING
+   +0x040 LargeIrpCtrlStackSize : UChar
+   +0x041 SmallIrpCtrlStackSize : UChar
+   +0x048 RegisteredFilters : _FLT_RESOURCE_LIST_HEAD
+   +0x0c8 AttachedVolumes  : _FLT_RESOURCE_LIST_HEAD
+   +0x148 MountingVolumes  : _LIST_ENTRY
+   +0x158 AttachedFileSystems : _FLT_MUTEX_LIST_HEAD
+   +0x1a8 ZombiedFltObjectContexts : _FLT_MUTEX_LIST_HEAD
+   +0x1f8 KtmResourceManagerHandle : Ptr64 Void
+   +0x200 KtmResourceManager : Ptr64 _KRESOURCEMANAGER
+   +0x208 FilterUnloadLock : _ERESOURCE
+   +0x270 DeviceObjectAttachLock : _FAST_MUTEX
+   +0x2a8 Prcb             : Ptr64 _FLT_PRCB
+   +0x2b0 PrcbPoolToFree   : Ptr64 Void
+   +0x2b8 LookasidePoolToFree : Ptr64 Void
+   +0x2c0 IrpCtrlStackProfiler : _FLTP_IRPCTRL_STACK_PROFILER
+   +0x400 SmallIrpCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x480 LargeIrpCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x500 ReserveIrpCtrls  : _RESERVE_IRPCTRL
+```
+
 
 
 #### FltRegisterFilter

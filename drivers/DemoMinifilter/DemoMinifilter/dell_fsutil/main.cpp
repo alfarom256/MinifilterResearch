@@ -16,10 +16,13 @@ int main(int argc, char** argv) {
 
 	Memory m = Memory();
 	FltManager oFlt = FltManager(&m);
-	LPVOID lpReturnOneGadget = oFlt.FindRet1();
-	printf("Found return one gadget at %llx\n", lpReturnOneGadget);
-	getchar();
-	if (!lpReturnOneGadget) {
+	HANDY_FUNCTIONS gl_hf = { 0 };
+	BOOL resolvedPatchFuncs = oFlt.ResolveFunctionsForPatch(&gl_hf);
+	printf("Found return one gadget at %llx\n", gl_hf.FuncReturns1);
+	printf("Found return zero gadget at %llx\n", gl_hf.FuncReturns0);
+
+	if (!(gl_hf.FuncReturns0 && gl_hf.FuncReturns1)) {
+		getchar();
 		exit(-1);
 	}
 
@@ -54,7 +57,7 @@ int main(int argc, char** argv) {
 		printf("Retained target volume : %S - %p\n", x.first, x.second);
 	}*/
 	
-	BOOL bRes = oFlt.RemovePreCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes, lpReturnOneGadget);
+	BOOL bRes = oFlt.RemovePrePostCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes, &gl_hf);
 
 	return 0;
 }

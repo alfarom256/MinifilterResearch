@@ -32,10 +32,15 @@
 #define VOLUME_OFFSET_CALLBACK_TBL 0x120
 
 #define CALLBACK_NODE_OFFSET_PREOP 0x18
+#define CALLBACK_NODE_OFFSET_POSTOP 0x20
 
 #define UNISTR_OFFSET_LEN 0
 #define UNISTR_OFFSET_BUF 8
 
+typedef struct _HANDY_FUNCTIONS {
+	PVOID FuncReturns0;
+	PVOID FuncReturns1;
+}HANDY_FUNCTIONS, *PHANDY_FUNCTIONS;
 
 class FltManager
 {
@@ -48,15 +53,19 @@ public:
 	PVOID GetFilterByName(const wchar_t* strFilterName);
 	PVOID GetFrameForFilter(LPVOID lpFilter);
 	std::vector<FLT_OPERATION_REGISTRATION> GetOperationsForFilter(PVOID lpFilter);
-	PVOID FindRet1();
+	BOOL ResolveFunctionsForPatch(PHANDY_FUNCTIONS lpHandyFunctions);
+
 	std::unordered_map<wchar_t*, PVOID> EnumFrameVolumes(LPVOID lpFrame);
 	DWORD GetFrameCount();
-	BOOL RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, LPVOID lpFunctionTarget);
+	BOOL RemovePrePostCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, PHANDY_FUNCTIONS lpHandyFuncs);
 
 private:
 	ULONG ulNumFrames;
 	PVOID ResolveDriverBase(const wchar_t* strDriverName);
 	PVOID ResolveFltmgrGlobals(LPVOID lpkFltMgrBase);
+	PVOID FindRet1(LPVOID lpNtosBase, _ppeb_ldr ldr);
+	PVOID FindRet0(LPVOID lpNtosBase, _ppeb_ldr ldr);
+
 	MemHandler* objMemHandler;
 
 };

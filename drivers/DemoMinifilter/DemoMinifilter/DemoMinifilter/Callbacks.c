@@ -34,5 +34,5 @@ FLT_PREOP_CALLBACK_STATUS PreCreateCallback2(PFLT_CALLBACK_DATA lpFltCallbackDat
         //DbgBreakPoint();
     }
 
-    return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    return FLT_POSTOP_FINISHED_PROCESSING;
 }

