@@ -6,7 +6,7 @@
       {
         "id": "e9a887463a0e62ce",
         "type": "leaf",
-        "dimension": 40.84415584415584,
+        "dimension": 67.5,
         "state": {
           "type": "markdown",
           "state": {
@@ -19,11 +19,11 @@
       {
         "id": "f2750f8a43419a6a",
         "type": "leaf",
-        "dimension": 59.15584415584415,
+        "dimension": 32.5,
         "state": {
           "type": "markdown",
           "state": {
-            "file": "0.0 Layout.md",
+            "file": "2.2 FltStartFiltering.md",
             "mode": "source",
             "source": false
           }
@@ -144,12 +144,12 @@
   },
   "active": "e9a887463a0e62ce",
   "lastOpenFiles": [
-    "0.0 Layout.md",
+    "2.2 FltStartFiltering.md",
     "Write-up.md",
+    "0.0 Layout.md",
     "Frame KDBG.md",
     "2.1 FltRegisterFilter.md",
     "1. What is a FS Minifilter.md",
-    "2.2 FltStartFiltering.md",
     "3. Fltmgr.sys internals.md",
     "FltCreateCommunicationPort.md",
     "Linked list manip bsod.md",

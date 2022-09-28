@@ -6,8 +6,6 @@ https://aviadshamriz.medium.com/part-1-fs-minifilter-hooking-7e743b042a9d
 
 As this article goes very in-depth into the mechanics of file system minifilter hooking with another loaded driver, I will focus on my research methods which led me to develop a PoC leveraging Dell's vulnerable "dbutil" driver to perform the same actions from user-mode, and some things I learned along the way.
 
-Alongside this I will present (mildly redacted) technical details of exploits I've previously found in production anti-malware products.
-
 ### 0.2 Acknowledgements
 Thank you to Avid and MZakocs for your work which helped make this possible.
 https://aviadshamriz.medium.com/part-1-fs-minifilter-hooking-7e743b042a9d
@@ -37,6 +35,96 @@ File system minifilters are drivers which are used to inspect, log, modify, or p
 FltMgr also maintains a list of volumes attached to the system, and is responsible for storing and invoking callbacks on a per-volume basis.
 
 ### 1.1 - Core concepts and APIs
+
+#### Altitude
+As previously mentioned, minifilters "sit in-between" the I/O manager and the filesystem driver. One of the fundamental questions and concepts which arose from the filtering behavior is: 
+How do I know where in the "stack" my driver sits? 
+What path does an IRP take from the I/O manager to the filesystem driver?
+
+The minifilter's Altitude describes it's load order. For example, a minifilter with an altitude of "30000" will be loaded into the I/O stack before a minifilter with an altitude of "30100."
+
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/load-order-groups-and-altitudes-for-minifilter-drivers
+
+```
+ ┌──────────────────────┐
+ │                      │
+ │     I/O Manager      │            ┌───────────────────┐
+ │                      │            │  Minifilter2:     │
+ └───────────┬──────────┘     ┌──────►  Altitude 42000   │
+             │                │      │                   │
+             │                │      └───────────────────┘
+             │                │                
+ ┌───────────▼──────────┐     │      ┌───────────────────┐
+ │                      ◄─────┘      │  Minifilter1:     │
+ │        FLTMGR        ◄────────────►  Altitude 30100   │
+ │                      ◄─────┐      │                   │
+ └───────────┬──────────┘     │      └───────────────────┘
+             │                │                
+             │                │      ┌───────────────────┐
+             │                │      │  Minifilter0:     │
+             │                └──────►  Altitude 30000   │
+ ┌───────────▼──────────┐            │                   │
+ │                      │            └───────────────────┘
+ │ Storage driver stack │
+ │                      │
+ └───────────┬──────────┘
+             │
+             │
+             ▼                          
+			...
+```
+(Fig 1) Simplified version of figure 1: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
+
+#### Frames
+Frames describe a range of Altitudes, and the mini filters and volumes associated with them.
+>For interoperability with legacy filter drivers, _FltMgr_ can attach filter device objects to a file system I/O stack in more than one location. Each of _FltMgr_'s filter device objects is called a _frame_. From the perspective of a legacy filter driver, each filter manager frame is just another legacy filter driver.
+Each filter manager frame represents a range of altitudes. The filter manager can adjust an existing frame or create a new frame to allow minifilter drivers to attach at the correct location.
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
+
+```
+┌──────────────────────┐
+│                      │
+│                      │
+│     I/O Manager      │
+│                      │
+│                      │               ┌────────────────────────┐
+└──────────┬───────────┘               │                        │
+           │                           │   Filter3              │
+           │                    ┌──────►   Altitude: 365000     │
+┌──────────▼───────────┐        │      │                        │
+│                      │        │      └────────────────────────┘
+│     Frame 1          ◄────────┘
+│     Altitude:        │
+│     305000 - 409500  ◄────────┐      ┌────────────────────────┐
+│                      │        │      │                        │
+└──────────┬───────────┘        │      │   Filter2              │
+           │                    └──────►   Altitude: 325000     │
+           │                           │                        │
+┌──────────▼───────────┐               └────────────────────────┘
+│                      │
+│    Legacy Filter     │
+│    (No Altitude)     │
+│                      │
+│                      │
+└──────────┬───────────┘               ┌────────────────────────┐
+           │                           │                        │
+           │                           │   Filter1              │
+┌──────────▼───────────┐        ┌──────►   Altitude: 165000     │
+│                      │        │      │                        │
+│      Frame 0         ◄────────┘      └────────────────────────┘
+│      Altitude:       │
+│      0 - 304999      ◄────────┐
+│                      │        │      ┌────────────────────────┐
+└──────────┬───────────┘        │      │                        │
+           │                    │      │   Filter0              │
+           │                    └──────►   Altitude: 145000     │
+┌──────────▼───────────┐               │                        │
+│                      │               └────────────────────────┘
+│ Storage driver stack │
+│                      │
+└──────────────────────┘
+```
+(Fig 2) Simplified version of figure 2: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
 #### FltRegisterFilter
 The `FltRegisterFilter` function is the API used by a minifilter to register with FltMgr.
@@ -113,7 +201,6 @@ NTSTATUS FLTAPI FltStartFiltering( [in] PFLT_FILTER Filter );
 https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nf-fltkernel-fltstartfiltering
 
 #### Filter (`_FLT_FILTER`)
-
 A filter object represents a filter... truly breaking ground here.
 Importantly for our purposes, the filter object contains a reference to the filter's name and callback table provided when the driver is registered by the api `FltRegisterFilter`
 
@@ -151,97 +238,68 @@ kd> dt FLTMGR!_FLT_FILTER
    +0x2a8 PortLock         : _EX_PUSH_LOCK_AUTO_EXPAND
 ```
 
-#### Altitude
-As previously mentioned, minifilters "sit in-between" the I/O manager and the filesystem driver. One of the fundamental questions and concepts which arose from the filtering behavior is: 
-How do I know where in the "stack" my driver sits? 
-What path does an IRP take from the I/O manager to the filesystem driver?
-
-The minifilter's Altitude describes it's load order. For example, a minifilter with an altitude of "30000" will be loaded into the I/O stack before a minifilter with an altitude of "30100."
-
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/load-order-groups-and-altitudes-for-minifilter-drivers
-
-```
- ┌──────────────────────┐
- │                      │
- │     I/O Manager      │            ┌───────────────────┐
- │                      │            │  Minifilter2:     │
- └───────────┬──────────┘     ┌──────►  Altitude 42000   │
-             │                │      │                   │
-             │                │      └───────────────────┘
-             │                │                
- ┌───────────▼──────────┐     │      ┌───────────────────┐
- │                      ◄─────┘      │  Minifilter1:     │
- │        FLTMGR        ◄────────────►  Altitude 30100   │
- │                      ◄─────┐      │                   │
- └───────────┬──────────┘     │      └───────────────────┘
-             │                │                
-             │                │      ┌───────────────────┐
-             │                │      │  Minifilter0:     │
-             │                └──────►  Altitude 30000   │
- ┌───────────▼──────────┐            │                   │
- │                      │            └───────────────────┘
- │ Storage driver stack │
- │                      │
- └───────────┬──────────┘
-             │
-             │
-             ▼                          
-			...
-```
-(Fig 1) Simplified version of figure 1: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
-
-#### Frame (`_FLTP_FRAME`)
-Frames describe a range of Altitudes, and the mini filters and volumes associated with them.
->For interoperability with legacy filter drivers, _FltMgr_ can attach filter device objects to a file system I/O stack in more than one location. Each of _FltMgr_'s filter device objects is called a _frame_. From the perspective of a legacy filter driver, each filter manager frame is just another legacy filter driver.
-Each filter manager frame represents a range of altitudes. The filter manager can adjust an existing frame or create a new frame to allow minifilter drivers to attach at the correct location.
+#### Instance (`_FLT_INSTANCE`)
+>The attachment of a minifilter driver at a particular altitude on a particular volume is called an _instance_ of the minifilter driver.
 https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
 ```
-┌──────────────────────┐
-│                      │
-│                      │
-│     I/O Manager      │
-│                      │
-│                      │               ┌────────────────────────┐
-└──────────┬───────────┘               │                        │
-           │                           │   Filter3              │
-           │                    ┌──────►   Altitude: 365000     │
-┌──────────▼───────────┐        │      │                        │
-│                      │        │      └────────────────────────┘
-│     Frame 1          ◄────────┘
-│     Altitude:        │
-│     305000 - 409500  ◄────────┐      ┌────────────────────────┐
-│                      │        │      │                        │
-└──────────┬───────────┘        │      │   Filter2              │
-           │                    └──────►   Altitude: 325000     │
-           │                           │                        │
-┌──────────▼───────────┐               └────────────────────────┘
-│                      │
-│    Legacy Filter     │
-│    (No Altitude)     │
-│                      │
-│                      │
-└──────────┬───────────┘               ┌────────────────────────┐
-           │                           │                        │
-           │                           │   Filter1              │
-┌──────────▼───────────┐        ┌──────►   Altitude: 165000     │
-│                      │        │      │                        │
-│      Frame 0         ◄────────┘      └────────────────────────┘
-│      Altitude:       │
-│      0 - 304999      ◄────────┐
-│                      │        │      ┌────────────────────────┐
-└──────────┬───────────┘        │      │                        │
-           │                    │      │   Filter0              │
-           │                    └──────►   Altitude: 145000     │
-┌──────────▼───────────┐               │                        │
-│                      │               └────────────────────────┘
-│ Storage driver stack │
-│                      │
-└──────────────────────┘
+kd> dt FLTMGR!_FLT_INSTANCE
+   +0x000 Base             : _FLT_OBJECT
+   +0x030 OperationRundownRef : Ptr64 _EX_RUNDOWN_REF_CACHE_AWARE
+   +0x038 Volume           : Ptr64 _FLT_VOLUME
+   +0x040 Filter           : Ptr64 _FLT_FILTER
+   +0x048 Flags            : _FLT_INSTANCE_FLAGS
+   +0x050 Altitude         : _UNICODE_STRING
+   +0x060 Name             : _UNICODE_STRING
+   +0x070 FilterLink       : _LIST_ENTRY
+   +0x080 ContextLock      : _EX_PUSH_LOCK_AUTO_EXPAND
+   +0x090 Context          : Ptr64 _CONTEXT_NODE
+   +0x098 TransactionContexts : _CONTEXT_LIST_CTRL
+   +0x0a0 TrackCompletionNodes : Ptr64 _TRACK_COMPLETION_NODES
+   +0x0a8 CallbackNodes    : [50] Ptr64 _CALLBACK_NODE
 ```
-(Fig 2) Simplified version of figure 2: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
-Examining the `_FLTP_FRAME` object in Windows, we can se a clearer relationship between frames, filters, and volumes.
+#### Volume (`_FLT_VOLUME`)
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/storage-device-stacks--storage-volumes--and-file-system-stacks
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/how-the-volume-is-mounted
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_vpb
+
+A `_FLT_VOLUME` represents a mounted volume on the system (shocking, I know). Among other things, a volume object contains a list of mini filter instances attached to the volume, as well as an object referencing a list of Callbacks for all supported IRP Major Functions.
+
+```
+kd> dt FLTMGR!_FLT_VOLUME
+   +0x000 Base             : _FLT_OBJECT
+   +0x030 Flags            : _FLT_VOLUME_FLAGS
+   +0x034 FileSystemType   : _FLT_FILESYSTEM_TYPE
+   +0x038 DeviceObject     : Ptr64 _DEVICE_OBJECT
+   +0x040 DiskDeviceObject : Ptr64 _DEVICE_OBJECT
+   +0x048 FrameZeroVolume  : Ptr64 _FLT_VOLUME
+   +0x050 VolumeInNextFrame : Ptr64 _FLT_VOLUME
+   +0x058 Frame            : Ptr64 _FLTP_FRAME
+   +0x060 DeviceName       : _UNICODE_STRING
+   +0x070 GuidName         : _UNICODE_STRING
+   +0x080 CDODeviceName    : _UNICODE_STRING
+   +0x090 CDODriverName    : _UNICODE_STRING
+   +0x0a0 InstanceList     : _FLT_RESOURCE_LIST_HEAD
+   +0x120 Callbacks        : _CALLBACK_CTRL
+   +0x508 ContextLock      : _EX_PUSH_LOCK_AUTO_EXPAND
+   +0x518 VolumeContexts   : _CONTEXT_LIST_CTRL
+   +0x520 StreamListCtrls  : _FLT_RESOURCE_LIST_HEAD
+   +0x5a0 FileListCtrls    : _FLT_RESOURCE_LIST_HEAD
+   +0x620 NameCacheCtrl    : _NAME_CACHE_VOLUME_CTRL
+   +0x6d8 MountNotifyLock  : _ERESOURCE
+   +0x740 TargetedOpenActiveCount : Int4B
+   +0x748 TxVolContextListLock : _EX_PUSH_LOCK_AUTO_EXPAND
+   +0x758 TxVolContexts    : _TREE_ROOT
+   +0x760 SupportedFeatures : Int4B
+   +0x764 BypassFailingFltNameLen : Uint2B
+   +0x766 BypassFailingFltName : [32] Wchar
+```
+
+It is important to note that the invocation of the callbacks per-volume uses the volume's associated `_CALLBACK_CTRL` object, and that object's list of `_CALLBACK_NODE`  elements.
+
+#### Frames (Cont.) (`_FLTP_FRAME`)
+Examining the `_FLTP_FRAME` object in Windbg, we can se a clearer relationship between frames, filters, and volumes.
 ```
 kd> dt FLTMGR!_FLTP_FRAME
    +0x000 Type             : _FLT_TYPE
@@ -343,92 +401,28 @@ To help visualize their association, the following chart describes a high level 
 ```
 (Fig 3) Association between `_FLTP_FRAME` and `_FLT_VOLUME`
 
-As shown in the type definition and the above graph, a frame contains a reference to all filter objects (`_FLT_FILTER`) assocaited with the frame, alongside a list of volumes (`_FLT_VOLUME`).
+As shown in the type definition and Fig. 3, a frame contains a reference to all filter objects (`_FLT_FILTER`) assocaited with the frame, alongside a list of volumes (`_FLT_VOLUME`).
 
 Most importantly, this highlights an important aspect of the proof-of-concept:
 * In order to access the proper objects to remove their associated callbacks we must first examine the frame to find the registered filters. We loop over every registered filter until we find the target filter and note the callbacks supported by the filter.
 * From there we must iterate over each callback table assocaited with the volume and, when we find a target callback in the list, modify the entry as desired to replace the callback for our target filter.
 
-#### Volume (`_FLT_VOLUME`)
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/storage-device-stacks--storage-volumes--and-file-system-stacks
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/how-the-volume-is-mounted
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_vpb
-
-A `_FLT_VOLUME` represents a mounted volume on the system (shocking, I know). Among other things, a volume object contains a list of mini filter instances attached to the volume, as well as an object referencing a list of Callbacks for all supported IRP Major Functions.
-
-```
-kd> dt FLTMGR!_FLT_VOLUME
-   +0x000 Base             : _FLT_OBJECT
-   +0x030 Flags            : _FLT_VOLUME_FLAGS
-   +0x034 FileSystemType   : _FLT_FILESYSTEM_TYPE
-   +0x038 DeviceObject     : Ptr64 _DEVICE_OBJECT
-   +0x040 DiskDeviceObject : Ptr64 _DEVICE_OBJECT
-   +0x048 FrameZeroVolume  : Ptr64 _FLT_VOLUME
-   +0x050 VolumeInNextFrame : Ptr64 _FLT_VOLUME
-   +0x058 Frame            : Ptr64 _FLTP_FRAME
-   +0x060 DeviceName       : _UNICODE_STRING
-   +0x070 GuidName         : _UNICODE_STRING
-   +0x080 CDODeviceName    : _UNICODE_STRING
-   +0x090 CDODriverName    : _UNICODE_STRING
-   +0x0a0 InstanceList     : _FLT_RESOURCE_LIST_HEAD
-   +0x120 Callbacks        : _CALLBACK_CTRL
-   +0x508 ContextLock      : _EX_PUSH_LOCK_AUTO_EXPAND
-   +0x518 VolumeContexts   : _CONTEXT_LIST_CTRL
-   +0x520 StreamListCtrls  : _FLT_RESOURCE_LIST_HEAD
-   +0x5a0 FileListCtrls    : _FLT_RESOURCE_LIST_HEAD
-   +0x620 NameCacheCtrl    : _NAME_CACHE_VOLUME_CTRL
-   +0x6d8 MountNotifyLock  : _ERESOURCE
-   +0x740 TargetedOpenActiveCount : Int4B
-   +0x748 TxVolContextListLock : _EX_PUSH_LOCK_AUTO_EXPAND
-   +0x758 TxVolContexts    : _TREE_ROOT
-   +0x760 SupportedFeatures : Int4B
-   +0x764 BypassFailingFltNameLen : Uint2B
-   +0x766 BypassFailingFltName : [32] Wchar
-```
-
-It is important to note that the invocation of the callbacks per-volume uses the volume's associated `_CALLBACK_CTRL` object, and that object's list of `_CALLBACK_NODE`  elements.
-
-#### Instance (`_FLT_INSTANCE`)
->The attachment of a minifilter driver at a particular altitude on a particular volume is called an _instance_ of the minifilter driver.
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
-
-```
-kd> dt FLTMGR!_FLT_INSTANCE
-   +0x000 Base             : _FLT_OBJECT
-   +0x030 OperationRundownRef : Ptr64 _EX_RUNDOWN_REF_CACHE_AWARE
-   +0x038 Volume           : Ptr64 _FLT_VOLUME
-   +0x040 Filter           : Ptr64 _FLT_FILTER
-   +0x048 Flags            : _FLT_INSTANCE_FLAGS
-   +0x050 Altitude         : _UNICODE_STRING
-   +0x060 Name             : _UNICODE_STRING
-   +0x070 FilterLink       : _LIST_ENTRY
-   +0x080 ContextLock      : _EX_PUSH_LOCK_AUTO_EXPAND
-   +0x090 Context          : Ptr64 _CONTEXT_NODE
-   +0x098 TransactionContexts : _CONTEXT_LIST_CTRL
-   +0x0a0 TrackCompletionNodes : Ptr64 _TRACK_COMPLETION_NODES
-   +0x0a8 CallbackNodes    : [50] Ptr64 _CALLBACK_NODE
-```
-
 #### Callback Node (`_CALLBACK_NODE`)
-
-
-#### FltRegisterFilter
-
-The first step to registering a file system minifilter is to, well, invoke the `FltRegisterFilter` method.
-
+A callback node represents a filter operation for a single I/O operation.
 ```
-NTSTATUS FLTAPI FltRegisterFilter( 
-	[in] PDRIVER_OBJECT Driver, 
-	[in] const FLT_REGISTRATION *Registration, 
-	[out] PFLT_FILTER *RetFilter 
-);
+kd> dt FLTMGR!_CALLBACK_NODE
+   +0x000 CallbackLinks    : _LIST_ENTRY
+   +0x010 Instance         : Ptr64 _FLT_INSTANCE
+   +0x018 PreOperation     : Ptr64     _FLT_PREOP_CALLBACK_STATUS 
+   +0x020 PostOperation    : Ptr64     _FLT_POSTOP_CALLBACK_STATUS 
+   +0x018 GenerateFileName : Ptr64     long 
+   +0x018 NormalizeNameComponent : Ptr64     long 
+   +0x018 NormalizeNameComponentEx : Ptr64     long 
+   +0x020 NormalizeContextCleanup : Ptr64     void 
+   +0x028 Flags            : _CALLBACK_NODE_FLAGS
 ```
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nf-fltkernel-fltregisterfilter
 
-
-
-
-
+The filter manager is responsible for the conversion of `FLT_REGISTRATION_OPERATION` into `_CALLBACK_NODE` structures associated with each filter instance and volume.
 
 ### 1.2 - Writing a minifilter
 To aid in research and testing, I created a very simple mini filter driver to get the PID of any given process which inevitably calls `NtCreateFile` on the file `C:\Users\<USER>\test.txt`, and log it via `DbgPrint`.
