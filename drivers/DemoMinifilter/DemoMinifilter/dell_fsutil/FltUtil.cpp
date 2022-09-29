@@ -156,7 +156,7 @@ PVOID FltManager::FindRet0(LPVOID lpNtosBase, _ppeb_ldr ldr)
 		0xc3 // ret
 	};
 
-	PBYTE lpKeCheckProcessorAffinityEx = (PBYTE)ldr->get(cexpr_adler32("KeCheckProcessorAffinityEx"));
+	PBYTE lpKeCheckProcessorAffinityEx = (PBYTE)ldr->get(cexpr_adler32("KeIsEmptyAffinityEx"));
 	if (!lpKeCheckProcessorAffinityEx) {
 		puts("Couldn't find KeCheckProcessorAffinityEx");
 		return NULL;
@@ -247,7 +247,7 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 		// now we need to read the number of filters associated with this frame
 
 		printf(
-			"Reading count of filters from %llx\n", 
+			"Reading count of filters from %llx\n",
 			lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_COUNT
 		);
 
@@ -261,27 +261,26 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 			return NULL;
 		}
 		printf("Found %d filters for frame\n", ulFiltersInFrame);
-		
-		// set the list iter to the head of the list
-		qwFrameListIter = lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_FILTER_LISTHEAD;
+
+		b = this->objMemHandler->VirtualRead(
+			lpFltFrame + FLT_FRAME_OFFSET_FILTER_RESOUCE_LISTHEAD + FILTER_RESOUCE_LISTHEAD_OFFSET_FILTER_LISTHEAD,
+			&qwFrameListHead,
+			sizeof(DWORD64)
+		);
+
+		if (!b) {
+			puts("Failed to read frame list head!");
+			return NULL;
+		}
+
+
+		qwFrameListIter = qwFrameListHead;
 
 		for (ULONG j = 0; j < ulFiltersInFrame; j++) {
-			// read the flink
-			b = this->objMemHandler->VirtualRead(
-				qwFrameListIter,
-				&qwFrameListIter,
-				sizeof(DWORD64)
-			);
-
-			if (!b) {
-				puts("Failed to read frame list head!");
-				return NULL;
-			}
-
 			DWORD64 qwFilterName = 0;
 			DWORD64 qwFilterNameBuffPtr = 0;
 			USHORT Length = 0;
-			
+
 			// adjust by subtracting 0x10 to give us a pointer to our filter
 			lpFilter = qwFrameListIter - 0x10;
 			qwFilterName = lpFilter + FILTER_OFFSET_NAME;
@@ -292,7 +291,7 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 				&Length,
 				sizeof(USHORT)
 			);
-			
+
 			if (!b) {
 				puts("Failed to read size of string for filter name!");
 				return NULL;
@@ -309,7 +308,7 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 			}
 
 			// allocate a buffer for the name
-			wchar_t* buf = new wchar_t[((SIZE_T)Length)+2];
+			wchar_t* buf = new wchar_t[((SIZE_T)Length) + 2];
 			memset(buf, 0, ((SIZE_T)Length) + 2);
 
 			// now read in the actual name
@@ -323,15 +322,13 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 				delete[] buf;
 				return NULL;
 			}
-
+			printf("\t\nFilter %d - %S", j, buf);
 			// compare it to our desired filter
+
 			if (!lstrcmpiW(buf, strFilterName)) {
-				printf("\nFound target filter %S at %llx\n", buf, lpFilter);
+				printf("\nFound target filter at %llx\n", lpFilter);
 				return (PVOID)lpFilter;
 			}
-
-			// free the buffer 
-			delete[] buf;
 
 			// read in the next flink
 			b = this->objMemHandler->VirtualRead(
@@ -340,11 +337,16 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 				sizeof(DWORD64)
 			);
 
+
 			if (!b) {
 				puts("Failed to read next flink!");
+				delete[] buf;
 				return NULL;
 			}
-						
+
+
+			// free the buffer 
+			delete[] buf;
 		}
 		// read the list of registered filters in the frame
 
@@ -352,7 +354,6 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 	printf("\nFailed to find filter matching name %S\n", strFilterName);
 	return NULL;
 }
-
 PVOID FltManager::GetFrameForFilter(LPVOID lpFilter)
 {
 	PVOID lpFrame = NULL;
