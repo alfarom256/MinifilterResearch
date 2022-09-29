@@ -7,9 +7,10 @@ https://aviadshamriz.medium.com/part-1-fs-minifilter-hooking-7e743b042a9d
 As this article goes very in-depth into the mechanics of file system minifilter hooking with another loaded driver, I will focus on my research methods which led me to develop a PoC leveraging Dell's vulnerable "dbutil" driver to perform the same actions from user-mode, and some things I learned along the way.
 
 ### 0.2 Acknowledgements
-Thank you to Avid and MZakocs for your work which helped make this possible.
+Thank you to James Forshaw, Avid Shamriz, and MZakocs for your work which helped make this possible.
 https://aviadshamriz.medium.com/part-1-fs-minifilter-hooking-7e743b042a9d
 https://github.com/mzakocs/CVE-2021-21551-POC
+https://googleprojectzero.blogspot.com/2021/01/hunting-for-bugs-in-windows-mini-filter.html
 
 Shoutout to the vxug community and my friends for inspiration and guidance:
 * ch3rn0byl
@@ -793,9 +794,92 @@ __int64 __fastcall FltpDoVolumeNotificationForNewFilter(_FLT_FILTER *lpFilter)
 }
 ```
 
-After loads of debugging and staring at IDA I found a chain of function calls stemming from `FltStartFiltering` that led me to an api called `FltpSetCallbacksForInstance` which looked like a pretty good candidate for the function responsible for... you know... setting the callbacks for a `_FLT_INSTANCE`. 
+After loads of debugging and staring at IDA I found a chain of function calls stemming from `FltStartFiltering` that led me to an api called `FltpSetCallbacksForInstance` which looked like a pretty good candidate for the function responsible for... you know... setting the callbacks for a `_FLT_INSTANCE`.  I'd found the first three functions in the call-chain in FltMgr correctly, but something was missing... So I set a breakpoint on  `FltpSetCallbacksForInstance` and reloaded my minifilter.
 
-I'd found the first three functions in the call-chain in FltMgr correctly, but something was missing... So I set a breakpoint on  `FltpSetCallbacksForInstance` and reloaded my minifilter.
+```
+__int64 __fastcall FltpSetCallbacksForInstance(
+        _FLT_INSTANCE *lpFilterInstance,
+        __int64 lpCallbackNode,
+        int dwCountCallbacks)
+{
+  Volume = lpFilterInstance->Volume;
+  v6 = qword_1C002B920;
+  Operations = lpFilterInstance->Filter->Operations;
+  KeEnterGuardedRegion();
+  v9 = ExAcquireCacheAwarePushLockSharedEx(v6, 0i64);
+  
+  // loop over the callback structure array for the filter
+  // until we see our terminating element (IRP_MJ_OPERATION_END)
+  
+  while ( Operations->MajorFunction != 0x80 && dwCountCallbacks )
+  {
+    if ( (unsigned __int8)(Operations->MajorFunction + 20) > 1u
+      && (Operations->PreOperation || Operations->PostOperation) )
+    {
+
+	 // !!! 
+	 // THIS is where I discovered that the MajorFunction + 22 was
+	 // the offset into the callback node array
+	 // !!! 
+	 
+      byteIndex = Operations->MajorFunction + 22;
+      if ( byteIndex < 0x32u )
+      {
+        if ( lpFilterInstance->CallbackNodes[v10] )
+        {
+          ExReleaseCacheAwarePushLockSharedEx(v9, 0i64);
+          KeLeaveGuardedRegion();
+          return 3223060493i64;
+        }
+        FltpInitializeCallbackNode(
+          lpCallbackNode,
+          (__int64)Operations,
+          0i64,
+          0i64,
+          0i64,
+          0i64,
+          (__int64)lpFilterInstance,
+          byteIndex);
+          
+        // increment pointer + sizeof(_CALLBACK_NODE)
+        lpCallbackNode += 0x30i64;
+        --dwCountCallbacks;
+      }
+    }
+    ++Operations;
+  }
+
+  // <SNIP>
+  // truncated for readability
+  // <SNIP>
+
+  if ( (lpFilterInstance->Base.Flags & 1) == 0 )
+  {
+    v17 = 0;
+    OperationFlags = Volume->Callbacks.OperationFlags;
+    CallbackNodes = lpFilterInstance->CallbackNodes;
+    do
+    {
+      if ( *CallbackNodes )
+      {
+        FltpInsertCallback(lpFilterInstance, Volume, v17);
+        *OperationFlags &= (*CallbackNodes)->Flags;
+      }
+      ++v17;
+      ++CallbackNodes;
+      ++OperationFlags;
+    }
+    while ( v17 < 0x32 );
+  }
+  
+  // <SNIP>
+  // truncated for readability
+  // <SNIP>
+  
+  return 0i64;
+}
+```
+Decompilation of `FltpSetCallbacksForInstance`
 
 As expected, when the breakpoint hit, the call chain I thought I would see appeared right in front of my eyes. Almost like computers aren't boxes of magic powered by electricity!
 
@@ -823,131 +907,301 @@ kd> k
 0d fffff38b`51f3dc40 00000000`00000000     nt!KiStartSystemThread+0x34
 ```
 
-As it turns out, the only xref I could find for this function was from within `FltpInitInstance`, so I felt like I was on the right track. I wasn't fully sure what the arguments in the list were, or what was being passed to `FltpInitCallbackNode`, so I decided to check the information about the pool for the first argument, which turned out to be ``
+As it turns out, the only xref I could find for this function was from within `FltpInitInstance`, so I felt like I was on the right track. Inspecting the pool for the first argument, I found that the value stored in `rcx` pointed to, as expected, an `_FLT_INSTANCE` structure for our newly-reloaded minifilter.
 
 ```
-kd> ? @rcx
-Evaluate expression: -58213697819472 = ffffcb0e`11386cb0
-kd> !pool ffffcb0e11386cb0
+kd> !pool @rcx
 Pool page ffffcb0e11386cb0 region is Nonpaged pool
  ffffcb0e11386000 size:  640 previous size:    0  (Allocated)  KDNF
  ffffcb0e11386650 size:  640 previous size:    0  (Allocated)  KDNF
 *ffffcb0e11386ca0 size:  2b0 previous size:    0  (Allocated) *FMis
 		Pooltag FMis : FLT_INSTANCE structure, Binary : fltmgr.sys
  ffffcb0e11386f50 size:   90 previous size:    0  (Free)       .t[|
+kd> dt FLTMGR!_FLT_INSTANCE @rcx
+   +0x000 Base             : _FLT_OBJECT
+   +0x030 OperationRundownRef : 0xffffcb0e`0de1b970 _EX_RUNDOWN_REF_CACHE_AWARE
+   +0x038 Volume           : 0xffffcb0e`0bb26750 _FLT_VOLUME
+   +0x040 Filter           : 0xffffcb0e`11604cb0 _FLT_FILTER
+   +0x048 Flags            : 4 ( INSFL_INITING )
+   +0x050 Altitude         : _UNICODE_STRING "123456"
+   +0x060 Name             : _UNICODE_STRING "AltitudeAndFlags"
+   +0x070 FilterLink       : _LIST_ENTRY [ 0xffffcb0e`11604d80 - 0xffffcb0e`11604d80 ]
+   +0x080 ContextLock      : _EX_PUSH_LOCK_AUTO_EXPAND
+   +0x090 Context          : (null) 
+   +0x098 TransactionContexts : _CONTEXT_LIST_CTRL
+   +0x0a0 TrackCompletionNodes : 0xffffcb0e`11af0580 _TRACK_COMPLETION_NODES
+   +0x0a8 CallbackNodes    : [50] (null)
 ```
 
--- end here
+Using the ***PHENOMENAL*** Windbg plugin, ret-sync (https://github.com/bootleg/ret-sync), I continued tracing execution into `FltpSetCallbacksForInstance`. This plugin allowed me to synchronize my debugging session between Windbg and IDA, and was indispensible during my research.
 
+Once the first argument type was found, I discovered that the second argument `rdx` was simply offset `0x238` from our `_FLT_INSTANCE`. Continuing debugging, I traced execution to `FltpInitializeCallbackNode`, and corrected the argument types in IDA to give the following decompilation:
 
 ```
-__int64 __fastcall FltpSetCallbacksForInstance(__int64 a1, __int64 a2, int a3)
+__int64 __fastcall FltpInitializeCallbackNode(
+        _CALLBACK_NODE *lpCallbackNode,
+        _FLT_OPERATION_REGISTRATION *lpFilterOperations,
+        _FLT_PREOP_CALLBACK_STATUS *a3,
+        _FLT_PREOP_CALLBACK_STATUS *a4,
+        _FLT_PREOP_CALLBACK_STATUS *a5,
+        _FLT_POSTOP_CALLBACK_STATUS *a6,
+        _FLT_INSTANCE *lpFilterInstance,
+        unsigned int byteIndex)
 {
-  __int64 v4; // r15
-  __int64 v6; // rbx
-  __int64 v8; // r14
-  __int64 v9; // rbx
-  unsigned __int8 v10; // cl
-  _QWORD *v12; // r9
-  __int64 v13; // rax
-  __int64 v14; // rcx
-  __int64 v15; // rbx
-  __int64 v16; // rbx
-  unsigned int v17; // ebp
-  _DWORD *v18; // r14
-  __int64 v19; // rbx
+  _CALLBACK_NODE_FLAGS v9; // eax
+  unsigned int Flags; // edx
+  __int64 result; // rax
+  _FLT_PREOP_CALLBACK_STATUS *v12; // rax
 
-  v4 = *(_QWORD *)(a1 + 56);
-  v6 = qword_1C002B920;
-  v8 = *(_QWORD *)(*(_QWORD *)(a1 + 64) + 424i64);
-  KeEnterGuardedRegion();
-  v9 = ExAcquireCacheAwarePushLockSharedEx(v6, 0i64);
-  while ( *(_BYTE *)v8 != 0x80 && a3 )
+  lpCallbackNode->Flags = 0;
+  lpCallbackNode->Instance = lpFilterInstance;
+  if ( lpFilterOperations )
   {
-    if ( (unsigned __int8)(*(_BYTE *)v8 + 20) > 1u && (*(_QWORD *)(v8 + 8) || *(_QWORD *)(v8 + 16)) )
+    lpCallbackNode->PreOperation = lpFilterOperations->PreOperation;
+    lpCallbackNode->PostOperation = lpFilterOperations->PostOperation;
+    v9 = 0;
+    Flags = lpFilterOperations->Flags;
+    if ( (Flags & 1) != 0 )
     {
-      v10 = *(_BYTE *)v8 + 22;
-      if ( v10 < 0x32u )
-      {
-        if ( *(_QWORD *)(a1 + 8i64 * v10 + 168) )
-        {
-          ExReleaseCacheAwarePushLockSharedEx(v9, 0i64);
-          KeLeaveGuardedRegion();
-          return 3223060493i64;
-        }
-        FltpInitializeCallbackNode(a2, v8, 0i64, 0i64, 0i64, 0i64, a1, v10);
-        a2 += 48i64;
-        --a3;
-      }
+      lpCallbackNode->Flags = CBNFL_SKIP_PAGING_IO;
+      v9 = CBNFL_SKIP_PAGING_IO;
+      Flags = lpFilterOperations->Flags;
     }
-    v8 += 32i64;
+    if ( (Flags & 2) != 0 )
+    {
+      v9 |= 2u;
+      lpCallbackNode->Flags = v9;
+      Flags = lpFilterOperations->Flags;
+    }
+    if ( (Flags & 4) != 0 )
+    {
+      v9 |= 8u;
+      lpCallbackNode->Flags = v9;
+      Flags = lpFilterOperations->Flags;
+    }
+    if ( (Flags & 8) != 0 )
+      lpCallbackNode->Flags = v9 | 0x10;
   }
-  v12 = *(_QWORD **)(a1 + 64);
-  v13 = v12[47];
-  if ( v13 && a3 )
+  else if ( a3 )
   {
-    *(_DWORD *)(a2 + 40) = 0;
-    *(_QWORD *)a2 = 0i64;
-    *(_QWORD *)(a2 + 16) = a1;
-    *(_QWORD *)(a2 + 24) = v13;
-    *(_QWORD *)(a1 + 176) = a2;
-    a2 += 48i64;
-    v12 = *(_QWORD **)(a1 + 64);
-    --a3;
-  }
-  v14 = v12[49];
-  if ( (v14 || v12[48]) && a3 )
-    FltpInitializeCallbackNode(a2, 0i64, 0i64, v12[48], v14, v12[50], a1, 0);
-  ExReleaseCacheAwarePushLockSharedEx(v9, 0i64);
-  KeLeaveGuardedRegion();
-  if ( (unsigned int)Feature_Servicing_FilterMgr_37048882__private_IsEnabled() )
-  {
-    v16 = qword_1C002B920;
-    KeEnterGuardedRegion();
-    ExAcquireCacheAwarePushLockExclusive(v16);
-    KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite((PERESOURCE)(v4 + 160), 1u);
+    lpCallbackNode->PreOperation = a3;
   }
   else
   {
-    KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite((PERESOURCE)(v4 + 160), 1u);
-    v15 = qword_1C002B920;
-    KeEnterGuardedRegion();
-    ExAcquireCacheAwarePushLockExclusive(v15);
-  }
-  if ( (*(_DWORD *)a1 & 1) == 0 )
-  {
-    v17 = 0;
-    v18 = (_DWORD *)(v4 + 1088);
-    v19 = a1 + 168;
-    do
+    v12 = a5;
+    if ( a5 )
     {
-      if ( *(_QWORD *)v19 )
-      {
-        FltpInsertCallback(a1, v4, v17);
-        *v18 &= *(_DWORD *)(*(_QWORD *)v19 + 40i64);
-      }
-      ++v17;
-      v19 += 8i64;
-      ++v18;
+      lpCallbackNode->Flags = CBNFL_USE_NAME_CALLBACK_EX;
     }
-    while ( v17 < 0x32 );
+    else
+    {
+      if ( !a4 )
+        goto LABEL_10;
+      v12 = a4;
+    }
+    lpCallbackNode->PreOperation = v12;
+    lpCallbackNode->PostOperation = a6;
   }
-  if ( (unsigned int)Feature_Servicing_FilterMgr_37048882__private_IsEnabled() )
-  {
-    ExReleaseResourceLite((PERESOURCE)(v4 + 160));
-    KeLeaveCriticalRegion();
-    ExReleaseCacheAwarePushLockExclusive(qword_1C002B920);
-    KeLeaveGuardedRegion();
-  }
-  else
-  {
-    ExReleaseCacheAwarePushLockExclusive(qword_1C002B920);
-    KeLeaveGuardedRegion();
-    ExReleaseResourceLite((PERESOURCE)(v4 + 160));
-    KeLeaveCriticalRegion();
-  }
-  return 0i64;
+LABEL_10:
+  result = byteIndex;
+  lpCallbackNode->CallbackLinks.Flink = 0i64;
+  lpFilterInstance->CallbackNodes[byteIndex] = lpCallbackNode;
+  return result;
 }
 ```
+Decompilation of `FltpInitializeCallbackNode`
+
+Once the node completed initialization, I then returned back into `FltpSetCallbacksForInstance` where the next step was to insert the created callback node into the volume by the function `FltpInsertCallback`.
+
+Breaking on `FltpInsertCallback`, I observed the referenced second argument of `_FLT_VOLUME`, and enumerated the callback table on function entry and return. But first I noted the address of my pre-create routine:
+```
+kd> x DemoMinifilter!PreCreateCallback
+fffff805`0c161020 DemoMinifilter!PreCreateCallback (struct _FLT_CALLBACK_DATA *, struct _FLT_RELATED_OBJECTS *, void **)
+```
+
+I then inspected the volume passed in via `rdx`, and it's associated callback table. Examining the list of callbacks, since I know my filter is only registering IRP_MJ_CREATE, I only need to monitor the callbacks at index 22:
+`(IRP_MJ_CREATE + 22) == 0 + 22 == 22`
+```
+kd> dt FLTMGR!_FLT_VOLUME @rdx
+   +0x000 Base             : _FLT_OBJECT
+   +0x030 Flags            : 0x164 (No matching name)
+   +0x034 FileSystemType   : 2 ( FLT_FSTYPE_NTFS )
+   +0x038 DeviceObject     : 0xffffcb0e`0ba329d0 _DEVICE_OBJECT
+   +0x040 DiskDeviceObject : 0xffffcb0e`0bb238f0 _DEVICE_OBJECT
+   +0x048 FrameZeroVolume  : 0xffffcb0e`0bc62480 _FLT_VOLUME
+   +0x050 VolumeInNextFrame : (null) 
+   +0x058 Frame            : 0xffffcb0e`0b3a5020 _FLTP_FRAME
+   +0x060 DeviceName       : _UNICODE_STRING "\Device\HarddiskVolume4"
+   +0x070 GuidName         : _UNICODE_STRING "\??\Volume{980944d3-e7a1-400d-a9d7-4a890dc7dcee}"
+   +0x080 CDODeviceName    : _UNICODE_STRING "\Ntfs"
+   +0x090 CDODriverName    : _UNICODE_STRING "\FileSystem\Ntfs"
+   +0x0a0 InstanceList     : _FLT_RESOURCE_LIST_HEAD
+   +0x120 Callbacks        : _CALLBACK_CTRL
+   +0x508 ContextLock      : _EX_PUSH_LOCK_AUTO_EXPAND
+   +0x518 VolumeContexts   : _CONTEXT_LIST_CTRL
+   +0x520 StreamListCtrls  : _FLT_RESOURCE_LIST_HEAD
+   +0x5a0 FileListCtrls    : _FLT_RESOURCE_LIST_HEAD
+   +0x620 NameCacheCtrl    : _NAME_CACHE_VOLUME_CTRL
+   +0x6d8 MountNotifyLock  : _ERESOURCE
+   +0x740 TargetedOpenActiveCount : 0n1175
+   +0x748 TxVolContextListLock : _EX_PUSH_LOCK_AUTO_EXPAND
+   +0x758 TxVolContexts    : _TREE_ROOT
+   +0x760 SupportedFeatures : 0n12
+   +0x764 BypassFailingFltNameLen : 0
+   +0x766 BypassFailingFltName : [32]  ""
+
+// getting the _CALLBACK_CTRL object
+kd> dx -id 0,0,ffffcb0e0b2eb040 -r1 (*((FLTMGR!_CALLBACK_CTRL *)0xffffcb0e0bc625a0))
+(*((FLTMGR!_CALLBACK_CTRL *)0xffffcb0e0bc625a0))                 [Type: _CALLBACK_CTRL]
+    [+0x000] OperationLists   [Type: _LIST_ENTRY [50]]
+    [+0x320] OperationFlags   [Type: _CALLBACK_NODE_FLAGS [50]]
+
+kd> dx -id 0,0,ffffcb0e0b2eb040 -r1 (*((FLTMGR!_LIST_ENTRY (*)[50])0xffffcb0e0bc625a0))
+(*((FLTMGR!_LIST_ENTRY (*)[50])0xffffcb0e0bc625a0))                 [Type: _LIST_ENTRY [50]]
+    ... TRUNCATED
+    [22]             [Type: _LIST_ENTRY] // list of create callbacks
+    ... TRUNCATED
+```
+
+From there, I issued the `dl` command to walk the linked list of callbacks at the initial breakpoint, before our callback was inserted.
+
+```
+// walking the linked list before function return
+kd> dx -id 0,0,ffffcb0e0b2eb040 -r1 (*((FLTMGR!_LIST_ENTRY *)0xffffcb0e0bc62700))
+(*((FLTMGR!_LIST_ENTRY *)0xffffcb0e0bc62700))                 [Type: _LIST_ENTRY]
+    [+0x000] Flink            : 0xffffcb0e0f1e0718 [Type: _LIST_ENTRY *]
+    [+0x008] Blink            : 0xffffcb0e0bc69ad8 [Type: _LIST_ENTRY *]
+kd> dl 0xffffcb0e0bc62700
+ffffcb0e`0bc62700  ffffcb0e`0f1e0718 ffffcb0e`0bc69ad8 (_LIST_ENTRY)
+ffffcb0e`0bc62710  ffffcb0e`0f1e0748 ffffcb0e`0b3935d8
+
+ffffcb0e`0f1e0718  ffffcb0e`0bda3b18 ffffcb0e`0bc62700 (_LIST_ENTRY)
+ffffcb0e`0f1e0728  ffffcb0e`0f1e04e0 fffff805`1c63d350
+
+ffffcb0e`0bda3b18  ffffcb0e`0b3935a8 ffffcb0e`0f1e0718 (_LIST_ENTRY)
+ffffcb0e`0bda3b28  ffffcb0e`0bda38b0 fffff805`10a77360
+
+ffffcb0e`0b3935a8  ffffcb0e`0bc6bd58 ffffcb0e`0bda3b18 (_LIST_ENTRY)
+ffffcb0e`0b3935b8  ffffcb0e`0b393010 fffff805`1c5a1460
+
+ffffcb0e`0bc6bd58  ffffcb0e`0bc69ad8 ffffcb0e`0b3935a8 (_LIST_ENTRY)
+ffffcb0e`0bc6bd68  ffffcb0e`0bc6bb20 fffff805`10a20010
+
+ffffcb0e`0bc69ad8  ffffcb0e`0bc62700 ffffcb0e`0bc6bd58 (_LIST_ENTRY)
+ffffcb0e`0bc69ae8  ffffcb0e`0bc698a0 fffff805`109eb4b0
+
+```
+
+Once enumerated, I continued execution until the function returned, and re-walked the linked list of callbacks and found the pre-create callback had successfully been inserted into the volume's callback table.
+
+```
+
+kd> pt
+FLTMGR!FltpInsertCallback+0x44:
+fffff805`0fc91de8 c3              ret
+kd> dl 0xffffcb0e0bc62700
+ffffcb0e`0bc62700  ffffcb0e`0f1e0718 ffffcb0e`0bc69ad8 (_LIST_ENTRY)
+ffffcb0e`0bc62710  ffffcb0e`0f1e0748 ffffcb0e`0b3935d8
+
+ffffcb0e`0f1e0718  ffffcb0e`0bda3b18 ffffcb0e`0bc62700 (_LIST_ENTRY)
+ffffcb0e`0f1e0728  ffffcb0e`0f1e04e0 fffff805`1c63d350
+
+ffffcb0e`0bda3b18  ffffcb0e`0b3935a8 ffffcb0e`0f1e0718 (_LIST_ENTRY)
+ffffcb0e`0bda3b28  ffffcb0e`0bda38b0 fffff805`10a77360
+
+ffffcb0e`0b3935a8  ffffcb0e`1214df68 ffffcb0e`0bda3b18 (_LIST_ENTRY)
+ffffcb0e`0b3935b8  ffffcb0e`0b393010 fffff805`1c5a1460
+
+ffffcb0e`1214df68  ffffcb0e`0bc6bd58 ffffcb0e`0b3935a8 (_LIST_ENTRY)
+ffffcb0e`1214df78  ffffcb0e`1214dd30 fffff805`0c161020 // pre create routine inserted into volume callback node
+
+ffffcb0e`0bc6bd58  ffffcb0e`0bc69ad8 ffffcb0e`1214df68 (_LIST_ENTRY)
+ffffcb0e`0bc6bd68  ffffcb0e`0bc6bb20 fffff805`10a20010
+
+ffffcb0e`0bc69ad8  ffffcb0e`0bc62700 ffffcb0e`0bc6bd58 (_LIST_ENTRY)
+ffffcb0e`0bc69ae8  ffffcb0e`0bc698a0 fffff805`109eb4b0
+
+```
+
+With ALL of that out of the way, I then had a decent understanding of what I had to do to get at the callbacks I needed to patch:
+
+1. Somehow find the frame
+2. Find all the volumes in the frame
+3. For every volume in the frame, find the `_CALLBACK_CTRL` object
+4. Inside every `_CALLBACK_CTRL` object, index into it's list of  `_CALLBACK_NODE` lists with `MajorFunction+22` as the index
+5. Inside that list, compare the `_CALLBACK_NODE` pre and post operations and, if they match our target minifilters callbacks, patch them.
+
+There were two small problems, though:
+1. How do I find the frame?
+2. What the hell am I going to patch them with?
+
+The second one was easy.
+For pre-operation callbacks, the following return values indicate statuses back to FltMgr:
+
+| Status | Value | Description |
+| --- | --- | --- |
+| FLT_PREOP_SUCCESS_WITH_CALLBACK | 0 | The callback was successful. Pass on the IO request and get a post-operation callback after completion. |
+| FLT_PREOP_SUCCESS_NO_CALLBACK | 1 | The callback was successful. Pass on the IO request. No callback required. |
+| FLT_PREOP_PENDING | 2 | Mark the IO operation as pending. |
+| FLT_PREOP_DISALLOW_FASTIO | 3 | If handling a Fast IO operation, fail it to force the operation as a normal IO Request. |
+| FLT_PREOP_COMPLETE | 4 | The operation has been completed. Do not pass on the IO request to any other drivers, even other filters in the stack. |
+| FLT_PREOP_SYNCHRONIZE | 5 | Synchronize the post-operation callback in the same thread. |
+| FLT_PREOP_DISALLOW_FSFILTER_IO | 6 | Disallow FastIO file creation. |
+https://googleprojectzero.blogspot.com/2021/01/hunting-for-bugs-in-windows-mini-filter.html
+
+So to patch out the pre-operation I needed to either return 1 or 4.
+Searching for gadgets within Ntoskrnl led me to `KeIsEmptyAffinityEx`:
+
+```
+kd> uf nt!KeIsEmptyAffinityEx
+nt!KeIsEmptyAffinityEx:
+fffff805`0d00f060 440fb701        movzx   r8d,word ptr [rcx]
+fffff805`0d00f064 33c0            xor     eax,eax
+fffff805`0d00f066 66413bc0        cmp     ax,r8w
+fffff805`0d00f06a 7318            jae     nt!KeIsEmptyAffinityEx+0x24 (fffff805`0d00f084)  Branch
+
+nt!KeIsEmptyAffinityEx+0xc:
+fffff805`0d00f06c 0f1f4000        nop     dword ptr [rax]
+
+nt!KeIsEmptyAffinityEx+0x10:
+fffff805`0d00f070 0fb7d0          movzx   edx,ax
+fffff805`0d00f073 48837cd10800    cmp     qword ptr [rcx+rdx*8+8],0
+fffff805`0d00f079 7510            jne     nt!KeIsEmptyAffinityEx+0x2b (fffff805`0d00f08b)  Branch
+
+nt!KeIsEmptyAffinityEx+0x1b:
+fffff805`0d00f07b 66ffc0          inc     ax
+fffff805`0d00f07e 66413bc0        cmp     ax,r8w
+fffff805`0d00f082 72ec            jb      nt!KeIsEmptyAffinityEx+0x10 (fffff805`0d00f070)  Branch
+
+// gadget to return 1
+nt!KeIsEmptyAffinityEx+0x24:
+fffff805`0d00f084 b801000000      mov     eax,1
+fffff805`0d00f089 c3              ret
+
+// gadget to return 0
+nt!KeIsEmptyAffinityEx+0x2b:
+fffff805`0d00f08b 33c0            xor     eax,eax
+fffff805`0d00f08d c3              ret
+```
+
+So all I had to do was patch the pre-operation callback to `nt!KeIsEmptyAffinityEx+0x24` to always return one.
+
+For post-operation callbacks, the process is identical.
+
+FLT_POSTOP_FINISHED_PROCESSING
+
+0
+
+The callback was successful. No further processing required.
+
+FLT_POSTOP_MORE_PROCESSING_REQUIRED
+
+1
+
+Halts completion of the IO request. The operation will be pending until the filter driver completes it.
+
+FLT_POSTOP_DISALLOW_FSFILTER_IO
+
+2
+
+Disallow FastIO file creation.
