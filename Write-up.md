@@ -1133,9 +1133,123 @@ With ALL of that out of the way, I then had a decent understanding of what I had
 
 There were two small problems, though:
 1. How do I find the frame?
-2. What the hell am I going to patch them with?
+2. What the hell am I going to patch the callbacks with?
 
-The second one was easy.
+#### 1.3.1 How do I find the frame?
+I started poking around various get/set/enumerate functions to see if there was somewhere I could find a reference to a frame or list of frames when I came across `FltEnumerateFilters`. Turns out, and through trial and error, I'd found a reference to a global variable called...  \*drum roll\*  `FLTMGR!FltGlobals` through an exported function.
+
+```
+kd> uf FLTMGR!FltEnumerateFilters
+FLTMGR!FltEnumerateFilters:
+fffff805`0fce5a60 488bc4          mov     rax,rsp
+fffff805`0fce5a63 48895808        mov     qword ptr [rax+8],rbx
+fffff805`0fce5a67 48896810        mov     qword ptr [rax+10h],rbp
+fffff805`0fce5a6b 48897020        mov     qword ptr [rax+20h],rsi
+fffff805`0fce5a6f 4c894018        mov     qword ptr [rax+18h],r8
+fffff805`0fce5a73 57              push    rdi
+fffff805`0fce5a74 4154            push    r12
+fffff805`0fce5a76 4155            push    r13
+fffff805`0fce5a78 4156            push    r14
+fffff805`0fce5a7a 4157            push    r15
+fffff805`0fce5a7c 4883ec20        sub     rsp,20h
+fffff805`0fce5a80 33db            xor     ebx,ebx
+fffff805`0fce5a82 8bea            mov     ebp,edx
+fffff805`0fce5a84 8bfb            mov     edi,ebx
+fffff805`0fce5a86 4d8bf0          mov     r14,r8
+fffff805`0fce5a89 488bf1          mov     rsi,rcx
+fffff805`0fce5a8c 4c8b15a5c6fdff  mov     r10,qword ptr [FLTMGR!_imp_KeEnterCriticalRegion (fffff805`0fcc2138)]
+fffff805`0fce5a93 e858e23dfd      call    nt!KeEnterCriticalRegion (fffff805`0d0c3cf0)
+fffff805`0fce5a98 b201            mov     dl,1
+
+// ding ding ding
+fffff805`0fce5a9a 488d0d775cfdff  lea     rcx,[FLTMGR!FltGlobals+0x58 (fffff805`0fcbb718)]
+// ding ding ding
+
+fffff805`0fce5aa1 4c8b1588c6fdff  mov     r10,qword ptr [FLTMGR!_imp_ExAcquireResourceSharedLite (fffff805`0fcc2130)]
+fffff805`0fce5aa8 e803103dfd      call    nt!ExAcquireResourceSharedLite (fffff805`0d0b6ab0)
+fffff805`0fce5aad 4c8b3dcc5cfdff  mov     r15,qword ptr [FLTMGR!FltGlobals+0xc0 (fffff805`0fcbb780)]
+fffff805`0fce5ab4 488d05c55cfdff  lea     rax,[FLTMGR!FltGlobals+0xc0 (fffff805`0fcbb780)]
+fffff805`0fce5abb 4c3bf8          cmp     r15,rax
+fffff805`0fce5abe 747f            je      FLTMGR!FltEnumerateFilters+0xdf (fffff805`0fce5b3f)  Branch
+```
+
+`FltGlobals` unsurprisingly has the type `FLTMGR!_GLOBALS`.
+
+```
+kd> dt FLTMGR!_GLOBALS
+   +0x000 DebugFlags       : Uint4B
+   +0x008 TraceFlags       : Uint8B
+   +0x010 GFlags           : Uint4B
+   +0x018 RegHandle        : Uint8B
+   +0x020 NumProcessors    : Uint4B
+   +0x024 CacheLineSize    : Uint4B
+   +0x028 AlignedInstanceTrackingListSize : Uint4B
+   +0x030 ControlDeviceObject : Ptr64 _DEVICE_OBJECT
+   +0x038 DriverObject     : Ptr64 _DRIVER_OBJECT
+   +0x040 KtmTransactionManagerHandle : Ptr64 Void
+   +0x048 TxVolKtmResourceManagerHandle : Ptr64 Void
+   +0x050 TxVolKtmResourceManager : Ptr64 _KRESOURCEMANAGER
+   +0x058 FrameList        : _FLT_RESOURCE_LIST_HEAD
+   +0x0d8 Phase2InitLock   : _FAST_MUTEX
+   +0x110 RegistryPath     : _UNICODE_STRING
+   +0x120 RegistryPathBuffer : [160] Wchar
+   +0x260 GlobalVolumeOperationLock : Ptr64 _EX_PUSH_LOCK_CACHE_AWARE_LEGACY
+   +0x268 FltpServerPortObjectType : Ptr64 _OBJECT_TYPE
+   +0x270 FltpCommunicationPortObjectType : Ptr64 _OBJECT_TYPE
+   +0x278 MsgDeviceObject  : Ptr64 _DEVICE_OBJECT
+   +0x280 ManualDeviceAttachTimer : Ptr64 _EX_TIMER
+   +0x288 ManualDeviceAttachWork : _WORK_QUEUE_ITEM
+   +0x2a8 ManualDeviceAttachLimit : Int4B
+   +0x2ac ManualAttachDelayCounter : Int4B
+   +0x2b0 FastManualAttachTimerPeriod : Uint4B
+   +0x2b4 ManualAttachTimerPeriod : Uint4B
+   +0x2b8 ManualAttachDelay : Uint4B
+   +0x2bc ManualAttachIgnoredDevices : UChar
+   +0x2bd ManualAttachOnlyOnceDevices : UChar
+   +0x2be ManualAttachFastAttachDevices : UChar
+   +0x2c0 CallbackStackSwapThreshold : Uint4B
+   +0x300 TargetedIoCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x380 IoDeviceHintLookasideList : _PAGED_LOOKASIDE_LIST
+   +0x400 StreamListCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x480 FileListCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x500 NameCacheCreateCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x580 AsyncIoContextLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x600 WorkItemLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x680 NameControlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x700 OperationStatusCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x780 NameGenerationContextLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x800 FileLockLookasideList : _PAGED_LOOKASIDE_LIST
+   +0x880 TxnParameterBlockLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x900 TxCtxExtensionNPagedLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0x980 TxVolCtxLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0xa00 TxVolStreamListCtrlEntryLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xa80 SectionListCtrlLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0xb00 SectionCtxExtensionLookasideList : _NPAGED_LOOKASIDE_LIST
+   +0xb80 OpenReparseListLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xc00 OpenReparseListEntryLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xc80 QueryOnCreateLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xd00 NameBufferLookasideList : _PAGED_LOOKASIDE_LIST
+   +0xd80 NameCacheNodeLookasideLists : [7] _PAGED_LOOKASIDE_LIST
+   +0x1100 FltpParameterOffsetTable : [28] <unnamed-tag>
+   +0x11e0 ThrottledWorkCtrl : _THROTTLED_WORK_ITEM_CTRL
+   +0x1230 LostItemDelayInSeconds : Uint4B
+   +0x1238 VerifiedFiltersList : _LIST_ENTRY
+   +0x1248 VerifiedFiltersLock : Uint8B
+   +0x1250 VerifiedResourceLinkFailures : Int4B
+   +0x1254 VerifiedResourceUnlinkFailures : Int4B
+   +0x1258 PerfTraceRoutines : Ptr64 _WMI_FLTIO_NOTIFY_ROUTINES
+   +0x1260 DummyPerfTraceRoutines : _WMI_FLTIO_NOTIFY_ROUTINES
+   +0x1290 RenameCounter    : _LARGE_INTEGER
+   +0x1298 FilterSupportedFeaturesMode : Int4B
+   +0x12a0 InitialRundownSize : Uint8B
+```
+
+To find the list of frames, I must load access the `_FLT_RESOURCE_LIST_HEAD` for the frame list, and iterate over every element (one per frame). Once the frames were found, iterating over every frame to find every volume/instance would follow the exact same process. Perfect! 
+
+But that just leaves me with the second question...
+
+#### 1.3.2 What the hell am I going to patch the callbacks with?
+This one was easy.
 For pre-operation callbacks, the following return values indicate statuses back to FltMgr:
 
 | Status | Value | Description |
@@ -1184,24 +1298,32 @@ fffff805`0d00f08b 33c0            xor     eax,eax
 fffff805`0d00f08d c3              ret
 ```
 
-So all I had to do was patch the pre-operation callback to `nt!KeIsEmptyAffinityEx+0x24` to always return one.
+So all I had to do was patch the pre-operation callback to `nt!KeIsEmptyAffinityEx+0x24` to always return `FLT_PREOP_SUCCESS_WITH_CALLBACK`.
 
-For post-operation callbacks, the process is identical.
+For post-operation callbacks, the process is identical, and the following return values indicate statuses back to FltMgr:
+| Status | Value | Description |
+| --- | --- | --- |
+| FLT_POSTOP_FINISHED_PROCESSING | 0 | The callback was successful. No further processing required. |
+| FLT_POSTOP_MORE_PROCESSING_REQUIRED | 1 | Halts completion of the IO request. The operation will be pending until the filter driver completes it. |
+| FLT_POSTOP_DISALLOW_FSFILTER_IO | 2 | Disallow FastIO file creation.|
 
-FLT_POSTOP_FINISHED_PROCESSING
+Luckily I could reuse the same function for my gadget to patch the callback with at `nt!KeIsEmptyAffinityEx+0x2b` to always return `FLT_POSTOP_FINISHED_PROCESSING`.
 
-0
+An astute reader may note that this would be easy to forensically identify as the callback patch destination is outside of the module's address space. You're absolutely right (thank you for pointing this out to me, qkumba <3). Not to worry, as this is only a PoC and I can hand-wave this concern away by just yelling "PoC" repeatedly.
 
-The callback was successful. No further processing required.
+With all of that done and dusted, we're left with simple steps to patch minifilter callbacks on a system using a virtual read/write primitive.
 
-FLT_POSTOP_MORE_PROCESSING_REQUIRED
-
-1
-
-Halts completion of the IO request. The operation will be pending until the filter driver completes it.
-
-FLT_POSTOP_DISALLOW_FSFILTER_IO
-
-2
-
-Disallow FastIO file creation.
+1. Find the base address of FltMgr
+2. Find the base address of our target minifilter to patch
+3. Find FltGlobals
+4. Find the list of frames
+5. For every frame in the list of frames:
+	1. walk the filter list until we find our target filter
+	2. read all of our target filter's `_FLT_OPERATION_REGISTRATION` objects
+	3. walk the volumes attached to the frame
+4. For every volume in the target frame:
+	1. Access the `_CALLBACK_CTRL` object
+	2. For every callback we want to patch:
+		1. Index into `_CALLBACK_CTRL->_LIST_ENTRY[50]` with the callbacks major function to get the list of callbacks supported for that major function
+		2. For every element in the list of `_CALLBACK_NODE` objects:
+			1. Compare our pre/post operations and patch them if they match
