@@ -19,7 +19,7 @@ Shoutout to the vxug community and my friends for inspiration and guidance:
 * Jonas
 
 ### 0.3 Setup
-My testing and development setup was original Windows 10 1809, though after a lovely VMWare crash which led me to lose my VM, I have since re-performed my research on the Microsoft-provided Windows 11 Enterprise Hyper-V evaluation image.
+Testing was performed on the Windows 11 Enterprise Evaluation VM on Hyper-V with VBS and HVCI disabled.
 
 ## 1.0 - What is a file system mini filter
 https://docs.microsoft.com/en-us/windows-hardware/drivers/ifs/about-file-system-filter-drivers
@@ -39,40 +39,40 @@ FltMgr also maintains a list of volumes attached to the system, and is responsib
 
 #### Altitude
 As previously mentioned, minifilters "sit in-between" the I/O manager and the filesystem driver. One of the fundamental questions and concepts which arose from the filtering behavior is: 
-How do I know where in the "stack" my driver sits? 
-What path does an IRP take from the I/O manager to the filesystem driver?
+* How do I know where in the "stack" my driver sits? 
+* What path does an IRP take from the I/O manager to the filesystem driver?
 
 The minifilter's Altitude describes it's load order. For example, a minifilter with an altitude of "30000" will be loaded into the I/O stack before a minifilter with an altitude of "30100."
 
 https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/load-order-groups-and-altitudes-for-minifilter-drivers
 
 ```
- ┌──────────────────────┐
- │                      │
- │     I/O Manager      │            ┌───────────────────┐
- │                      │            │  Minifilter2:     │
- └───────────┬──────────┘     ┌──────►  Altitude 42000   │
-             │                │      │                   │
-             │                │      └───────────────────┘
-             │                │                
- ┌───────────▼──────────┐     │      ┌───────────────────┐
- │                      ◄─────┘      │  Minifilter1:     │
- │        FLTMGR        ◄────────────►  Altitude 30100   │
- │                      ◄─────┐      │                   │
- └───────────┬──────────┘     │      └───────────────────┘
-             │                │                
-             │                │      ┌───────────────────┐
-             │                │      │  Minifilter0:     │
-             │                └──────►  Altitude 30000   │
- ┌───────────▼──────────┐            │                   │
- │                      │            └───────────────────┘
- │ Storage driver stack │
- │                      │
- └───────────┬──────────┘
-             │
-             │
-             ▼                          
-			...
+				 ┌──────────────────────┐
+				 │                      │
+				 │     I/O Manager      │            ┌───────────────────┐
+				 │                      │            │  Minifilter2:     │
+				 └───────────┬──────────┘     ┌──────►  Altitude 42000   │
+				             │                │      │                   │
+				             │                │      └───────────────────┘
+				             │                │                
+				 ┌───────────▼──────────┐     │      ┌───────────────────┐
+				 │                      ◄─────┘      │  Minifilter1:     │
+				 │        FLTMGR        ◄────────────►  Altitude 30100   │
+				 │                      ◄─────┐      │                   │
+				 └───────────┬──────────┘     │      └───────────────────┘
+				             │                │                
+				             │                │      ┌───────────────────┐
+				             │                │      │  Minifilter0:     │
+				             │                └──────►  Altitude 30000   │
+				 ┌───────────▼──────────┐            │                   │
+				 │                      │            └───────────────────┘
+				 │ Storage driver stack │
+				 │                      │
+				 └───────────┬──────────┘
+				             │
+				             │
+				             ▼                          
+							...
 ```
 (Fig 1) Simplified version of figure 1: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
@@ -83,47 +83,47 @@ Each filter manager frame represents a range of altitudes. The filter manager ca
 https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
 ```
-┌──────────────────────┐
-│                      │
-│                      │
-│     I/O Manager      │
-│                      │
-│                      │               ┌────────────────────────┐
-└──────────┬───────────┘               │                        │
-           │                           │   Filter3              │
-           │                    ┌──────►   Altitude: 365000     │
-┌──────────▼───────────┐        │      │                        │
-│                      │        │      └────────────────────────┘
-│     Frame 1          ◄────────┘
-│     Altitude:        │
-│     305000 - 409500  ◄────────┐      ┌────────────────────────┐
-│                      │        │      │                        │
-└──────────┬───────────┘        │      │   Filter2              │
-           │                    └──────►   Altitude: 325000     │
-           │                           │                        │
-┌──────────▼───────────┐               └────────────────────────┘
-│                      │
-│    Legacy Filter     │
-│    (No Altitude)     │
-│                      │
-│                      │
-└──────────┬───────────┘               ┌────────────────────────┐
-           │                           │                        │
-           │                           │   Filter1              │
-┌──────────▼───────────┐        ┌──────►   Altitude: 165000     │
-│                      │        │      │                        │
-│      Frame 0         ◄────────┘      └────────────────────────┘
-│      Altitude:       │
-│      0 - 304999      ◄────────┐
-│                      │        │      ┌────────────────────────┐
-└──────────┬───────────┘        │      │                        │
-           │                    │      │   Filter0              │
-           │                    └──────►   Altitude: 145000     │
-┌──────────▼───────────┐               │                        │
-│                      │               └────────────────────────┘
-│ Storage driver stack │
-│                      │
-└──────────────────────┘
+				┌──────────────────────┐
+				│                      │
+				│                      │
+				│     I/O Manager      │
+				│                      │
+				│                      │               ┌────────────────────────┐
+				└──────────┬───────────┘               │                        │
+				           │                           │   Filter3              │
+				           │                    ┌──────►   Altitude: 365000     │
+				┌──────────▼───────────┐        │      │                        │
+				│                      │        │      └────────────────────────┘
+				│     Frame 1          ◄────────┘
+				│     Altitude:        │
+				│     305000 - 409500  ◄────────┐      ┌────────────────────────┐
+				│                      │        │      │                        │
+				└──────────┬───────────┘        │      │   Filter2              │
+				           │                    └──────►   Altitude: 325000     │
+				           │                           │                        │
+				┌──────────▼───────────┐               └────────────────────────┘
+				│                      │
+				│    Legacy Filter     │
+				│    (No Altitude)     │
+				│                      │
+				│                      │
+				└──────────┬───────────┘               ┌────────────────────────┐
+				           │                           │                        │
+				           │                           │   Filter1              │
+				┌──────────▼───────────┐        ┌──────►   Altitude: 165000     │
+				│                      │        │      │                        │
+				│      Frame 0         ◄────────┘      └────────────────────────┘
+				│      Altitude:       │
+				│      0 - 304999      ◄────────┐
+				│                      │        │      ┌────────────────────────┐
+				└──────────┬───────────┘        │      │                        │
+				           │                    │      │   Filter0              │
+				           │                    └──────►   Altitude: 145000     │
+				┌──────────▼───────────┐               │                        │
+				│                      │               └────────────────────────┘
+				│ Storage driver stack │
+				│                      │
+				└──────────────────────┘
 ```
 (Fig 2) Simplified version of figure 2: https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts
 
@@ -139,7 +139,9 @@ NTSTATUS FLTAPI FltRegisterFilter(
 ```
 
 #### FLT_REGISTRATION
-A minifilter driver must provide a `FLT_REGISTRATION` structure containing, among other things, instance setup/teardown callbacks, filter unload callbacks, and a list of I/O operations to filter (`FLT_OPERATION_REGISTRATION OperationRegistration`).
+A minifilter driver must provide a `FLT_REGISTRATION` structure containing, among other things, instance setup/teardown callbacks, filter unload callbacks, and a list of I/O operations to filter (`FLT_OPERATION_REGISTRATION OperationRegistration`). 
+The following shows the type definition from Windbg:
+
 ```
 kd> dt FLTMGR!_FLT_REGISTRATION
    +0x000 Size             : Uint2B
@@ -175,7 +177,7 @@ typedef struct _FLT_OPERATION_REGISTRATION {
 } FLT_OPERATION_REGISTRATION, *PFLT_OPERATION_REGISTRATION;
 ```
 
-The list of operations is terminated by a `FLT_OPERATION_REGISTRATION` structure whose Major Function is `IRP_MJ_OPERATION_END`.
+The list of operations is terminated by an empty `FLT_OPERATION_REGISTRATION` structure whose Major Function is `IRP_MJ_OPERATION_END`.
 For example, a minifilter driver that only filters `IRP_MJ_CREATE` operations and only provides a pre-operation callback may use the following list of `FLT_REGISTRATION` structures:
 
 ```
@@ -199,7 +201,11 @@ FLT_PREOP_CALLBACK_STATUS PfltPreOperationCallback(
 	[out] PVOID *CompletionContext 
 ) { ... }
 ```
-https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nc-fltkernel-pflt_pre_operation_callback
+
+>A minifilter driver's pre-operation callback routine processes one or more types of I/O operations. This callback routine is similar to a dispatch routine in the legacy filter model.
+>A minifilter driver registers a pre-operation callback routine for a particular type of I/O operation by storing the callback routine's entry point in the **OperationRegistration** array of the [**FLT_REGISTRATION**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/ns-fltkernel-_flt_registration) structure. The minifilter driver passes this structure as a parameter to [**FltRegisterFilter**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nf-fltkernel-fltregisterfilter) in its [**DriverEntry**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/writing-a-driverentry-routine-for-a-minifilter-driver) routine. A minifilter driver can register a pre-operation callback routine for a given type of I/O operation without registering a post-operation callback ([**PFLT_POST_OPERATION_CALLBACK**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nc-fltkernel-pflt_post_operation_callback)) routine and vice versa.
+
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nc-fltkernel-pflt_pre_operation_callback#remarks
 
 #### PFLT_POST_OPERATION_CALLBACK
 The function typedef for a post-operation callback:
@@ -211,10 +217,15 @@ FLT_POSTOP_CALLBACK_STATUS PfltPostOperationCallback(
 	[in] FLT_POST_OPERATION_FLAGS Flags 
 ) {...}
 ```
+
+>A minifilter driver's post-operation callback routine performs completion processing for one or more types of I/O operations.
+>Post-operation callback routines are similar to the completion routines used by legacy file system filter drivers.
+Post-operation callback routines are called in an arbitrary thread context, at IRQL <= DISPATCH_LEVEL.
+
 https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nc-fltkernel-pflt_pre_operation_callback
 
 #### FltStartFiltering
-The # FltStartFiltering API is used to, well, indicate to the filter manager to attach the filter to each volume and start filtering.
+The FltStartFiltering API notifies the filter manager that the minifilter driver is ready to begin attaching to volumes and filtering I/O requests.
 ```
 NTSTATUS FLTAPI FltStartFiltering( [in] PFLT_FILTER Filter );
 ```
@@ -222,7 +233,7 @@ https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/nf-fltk
 
 #### Filter (`_FLT_FILTER`)
 A filter object represents a filter... truly breaking ground here.
-Importantly for our purposes, the filter object contains a reference to the filter's name and callback table provided when the driver is registered by the api `FltRegisterFilter`
+For our purposes, the filter object contains a reference to the filter's name and callback table provided when the driver is registered by the api `FltRegisterFilter`
 
 ```
 kd> dt FLTMGR!_FLT_FILTER
@@ -385,7 +396,7 @@ Volume List: ffffcb0e0b3a5150 "Frame 0"
 ```
 
 #### Frames (Cont.) (`_FLTP_FRAME`)
-Examining the `_FLTP_FRAME` object in Windbg, we can se a clearer relationship between frames, filters, and volumes.
+Examining the `_FLTP_FRAME` object in Windbg, we can see a clearer relationship between frames, filters, and volumes by displaying the `_FLTP_FRAME` object type via Windbg.
 ```
 kd> dt FLTMGR!_FLTP_FRAME
    +0x000 Type             : _FLT_TYPE
@@ -418,80 +429,80 @@ To help visualize their association, the following chart describes a high level 
 ```
            
            
-         _FLTP_FRAME
-        ┌─────────────────────────────────────────────────────────┐
-        │                                                         │
-        │  Type: _FLT_TYPE                                        │
-        │  Links: _LIST_ENTRY                                     │
-        │  FrameID: 0                                             │
-        │  AltitudeIntervalLow: "0"                               │
-        │  AltitudeIntervalHigh: "409500"                         │
-        │  ...                                                    │
-   ┌────┼─ RegisteredFilters: _FLT_RESOURCE_LIST_HEAD             │
-┌──┼────┤  AttachedVolumes: _FLT_RESOURCE_LIST_HEAD               │
-│  │    │  ...                                                    │
-│  │    └─────────────────────────────────────────────────────────┘
-│  │
-│  │     _FLT_RESOURCE_LIST_HEAD (Filters)
-│  │    ┌─────────────────────┐
-│  └────► rLock: _ERESOURCE   │            ┌───────────────┐
-│       │ rList: _LIST_ENTRY  ├────────────► FLT_FILTER 0  ◄─────┐
-│       │ Count: 0xb          │            └───────┬───────┘     │
-│       └─────────────────────┘                    │             │
-│                                          ┌───────▼───────┐     │
-│                                          │ FLT_FILTER 1  │     │
-│                                          └───────┬───────┘     │
-│                                                  │             │
-│                                          ┌───────▼───────┐     │
-│                                          │ FLT_FILTER 2  │     │
-│                                          └───────┬───────┘     │
-│                                                  │             │
-│                                          ┌───────▼───────┐     │
-│                                          │ FLT_FILTER 3  ├─────┘
-│                                          └───────────────┘
-│
-│
-│
-│
-│        _FLT_RESOURCE_LIST_HEAD (Volumes)
-│       ┌──────────────────────────┐
-└───────► rLock: _ERESOURCE        │
-        │ rList: _LIST_ENTRY ───┐  │
-        │ Count: 0x6            │  │
-        └───────────────────────┼──┘
-                                │
-                                │
-                                │
-                                │
-                _FLT_VOLUME     │
-                ┌───────────────▼──────────────────────────┐
-                │ \Device\Mup                              │
-                │ Callbacks: _CALLBACK_CTRL                ◄───────┐
-                │ InstanceList: _FLT_RESOURCE_LIST_HEAD    │       │
-                │                                          │       │
-                └───────────────┬──────────────────────────┘       │
-                                │                                  │
-                _FLT_VOLUME     │                                  │
-                ┌───────────────▼──────────────────────────┐       │
-                │ \Device\HarddiskVolume4                  │       │
-                │ Callbacks: _CALLBACK_CTRL                │       │
-                │ InstanceList: _FLT_RESOURCE_LIST_HEAD    │       │
-                │                                          │       │
-                └───────────────┬──────────────────────────┘       │
-                                │                                  │
-                ┌───────────────▼──────────────────────────┐       │
-                │                                          │       │
-                │        ... The rest of the list ...      ├───────┘
-                │                                          │
-                └──────────────────────────────────────────┘
+						 _FLTP_FRAME
+						┌─────────────────────────────────────────────────────────┐
+						│                                                         │
+						│  Type: _FLT_TYPE                                        │
+						│  Links: _LIST_ENTRY                                     │
+						│  FrameID: 0                                             │
+						│  AltitudeIntervalLow: "0"                               │
+						│  AltitudeIntervalHigh: "409500"                         │
+						│  ...                                                    │
+				   ┌────┼─ RegisteredFilters: _FLT_RESOURCE_LIST_HEAD             │
+				┌──┼────┤  AttachedVolumes: _FLT_RESOURCE_LIST_HEAD               │
+				│  │    │  ...                                                    │
+				│  │    └─────────────────────────────────────────────────────────┘
+				│  │
+				│  │     _FLT_RESOURCE_LIST_HEAD (Filters)
+				│  │    ┌─────────────────────┐
+				│  └────► rLock: _ERESOURCE   │            ┌───────────────┐
+				│       │ rList: _LIST_ENTRY  ├────────────► FLT_FILTER 0  ◄─────┐
+				│       │ Count: 0xb          │            └───────┬───────┘     │
+				│       └─────────────────────┘                    │             │
+				│                                          ┌───────▼───────┐     │
+				│                                          │ FLT_FILTER 1  │     │
+				│                                          └───────┬───────┘     │
+				│                                                  │             │
+				│                                          ┌───────▼───────┐     │
+				│                                          │ FLT_FILTER 2  │     │
+				│                                          └───────┬───────┘     │
+				│                                                  │             │
+				│                                          ┌───────▼───────┐     │
+				│                                          │ FLT_FILTER 3  ├─────┘
+				│                                          └───────────────┘
+				│
+				│
+				│
+				│
+				│        _FLT_RESOURCE_LIST_HEAD (Volumes)
+				│       ┌──────────────────────────┐
+				└───────► rLock: _ERESOURCE        │
+						│ rList: _LIST_ENTRY ───┐  │
+						│ Count: 0x6            │  │
+						└───────────────────────┼──┘
+												│
+												│
+												│
+												│
+								_FLT_VOLUME     │
+								┌───────────────▼──────────────────────────┐
+								│ \Device\Mup                              │
+								│ Callbacks: _CALLBACK_CTRL                ◄───────┐
+								│ InstanceList: _FLT_RESOURCE_LIST_HEAD    │       │
+								│                                          │       │
+								└───────────────┬──────────────────────────┘       │
+												│                                  │
+								_FLT_VOLUME     │                                  │
+								┌───────────────▼──────────────────────────┐       │
+								│ \Device\HarddiskVolume4                  │       │
+								│ Callbacks: _CALLBACK_CTRL                │       │
+								│ InstanceList: _FLT_RESOURCE_LIST_HEAD    │       │
+								│                                          │       │
+								└───────────────┬──────────────────────────┘       │
+												│                                  │
+								┌───────────────▼──────────────────────────┐       │
+								│                                          │       │
+								│        ... The rest of the list ...      ├───────┘
+								│                                          │
+								└──────────────────────────────────────────┘
 ```
 (Fig 3) Association between `_FLTP_FRAME` and `_FLT_VOLUME`
 
-As shown in the type definition and Fig. 3, a frame contains a reference to all filter objects (`_FLT_FILTER`) assocaited with the frame, alongside a list of volumes (`_FLT_VOLUME`).
+As shown in the type definition and Fig. 3, a frame contains a reference to all filter objects (`_FLT_FILTER`) associated with the frame, alongside a list of volumes (`_FLT_VOLUME`).
 
 Most importantly, this highlights an important aspect of the proof-of-concept:
 * In order to access the proper objects to remove their associated callbacks we must first examine the frame to find the registered filters. We loop over every registered filter until we find the target filter and note the callbacks supported by the filter.
-* From there we must iterate over each callback table assocaited with the volume and, when we find a target callback in the list, modify the entry as desired to replace the callback for our target filter.
+* From there we must iterate over each callback table associated with the volume and, when we find a target callback in the list, modify the entry as desired to replace the callback for our target filter.
 
 You can view the frames through Windbg with the command `!fltkd.frames`
 ```
@@ -662,7 +673,7 @@ Now that we have a prerequisite understanding of some of the functions and APIs 
 
 I cannot assert that this is a sane approach to debugging. YMMV.
 
-I first started by placing a breakpoing within the `PreCreateCallback` routine at the DbgPrint statement (so I wasn't bombarded with a break at every single create operation). The breakpoint was hit by a simple `echo 1 > .\Desktop\test.txt` command.
+I first started by placing a breakpoint within the `PreCreateCallback` routine at the DbgPrint statement (so I wasn't bombarded with a break at every single create operation). The breakpoint was hit by a simple `echo 1 > .\Desktop\test.txt` command.
 
 ```
 kd> bp `DemoMinifilter.c:25`
@@ -694,7 +705,7 @@ By following execution into `FltpPerformPreCallbacksWorker`, I saw the callback 
 My next, naive approach was to assume that the callbacks in the `FLT_FILTER` object were the ones being invoked.
 Spoiler alert: No.
 
-After patching those through a routine in my driver that just replaced all the ones I saw in the `PFLT_FILTER` I got from `FltRegisterFilter`, I saw that they were still being invoked. Back to the drawing board.
+After patching those through a routine in my driver that just replaced all the ones I saw in the `PFLT_FILTER` I got from `FltRegisterFilter`, I saw that they were still being invoked so I knew my job was not yet done.
 
 I decided to go aaaaaaaall the way back to `FltRegisterFilter` to examine any routines I thought might be doing anything "important" with the filter. Viewing `FltStartFiltering` in IDA shows the process of filter initialization.
 
@@ -881,7 +892,7 @@ __int64 __fastcall FltpSetCallbacksForInstance(
 ```
 Decompilation of `FltpSetCallbacksForInstance`
 
-As expected, when the breakpoint hit, the call chain I thought I would see appeared right in front of my eyes. Almost like computers aren't boxes of magic powered by electricity!
+As expected, when the breakpoint hit, the call-chain I thought I would see appeared right in front of my eyes. Almost like computers aren't boxes of magic powered by electricity!
 
 ```
 kd> bp FLTMGR!FltpSetCallbacksForInstance
@@ -907,7 +918,7 @@ kd> k
 0d fffff38b`51f3dc40 00000000`00000000     nt!KiStartSystemThread+0x34
 ```
 
-As it turns out, the only xref I could find for this function was from within `FltpInitInstance`, so I felt like I was on the right track. Inspecting the pool for the first argument, I found that the value stored in `rcx` pointed to, as expected, an `_FLT_INSTANCE` structure for our newly-reloaded minifilter.
+As it turns out, the only cross reference I could find for this function was from within `FltpInitInstance`, so I felt like I was on the right track. By inspecting the pool for the first argument, I found that the first argument value stored in `rcx` pointed to a pool allocation used for `_FLT_INSTANCE` structures for our newly-reloaded minifilter. Checking against the `_FLT_INSTANCE` type, I found that the first argument was pointer to a `_FLT_INSTANCE`.
 
 ```
 kd> !pool @rcx
@@ -1011,16 +1022,16 @@ LABEL_10:
 ```
 Decompilation of `FltpInitializeCallbackNode`
 
-Once the node completed initialization, I then returned back into `FltpSetCallbacksForInstance` where the next step was to insert the created callback node into the volume by the function `FltpInsertCallback`.
-
+Once the node completed initialization, I then returned back into `FltpSetCallbacksForInstance` once the node completed initialization. The next step was to insert the created callback node into the volume by the function `FltpInsertCallback`.
 Breaking on `FltpInsertCallback`, I observed the referenced second argument of `_FLT_VOLUME`, and enumerated the callback table on function entry and return. But first I noted the address of my pre-create routine:
+
 ```
 kd> x DemoMinifilter!PreCreateCallback
 fffff805`0c161020 DemoMinifilter!PreCreateCallback (struct _FLT_CALLBACK_DATA *, struct _FLT_RELATED_OBJECTS *, void **)
 ```
 
-I then inspected the volume passed in via `rdx`, and it's associated callback table. Examining the list of callbacks, since I know my filter is only registering IRP_MJ_CREATE, I only need to monitor the callbacks at index 22:
-`(IRP_MJ_CREATE + 22) == 0 + 22 == 22`
+I then inspected the volume passed in via `rdx`, and it's associated callback table. Examining the list of callbacks, since I know my filter is only registering `IRP_MJ_CREATE`, I only need to monitor the callbacks at index 22 `(IRP_MJ_CREATE + 22) == 22`: 
+
 ```
 kd> dt FLTMGR!_FLT_VOLUME @rdx
    +0x000 Base             : _FLT_OBJECT
@@ -1092,7 +1103,7 @@ ffffcb0e`0bc69ae8  ffffcb0e`0bc698a0 fffff805`109eb4b0
 
 ```
 
-Once enumerated, I continued execution until the function returned, and re-walked the linked list of callbacks and found the pre-create callback had successfully been inserted into the volume's callback table.
+I continued execution until the function returned, and re-walked the linked list of callbacks and found the pre-create callback had successfully been inserted into the volume's callback table.
 
 ```
 
@@ -1123,7 +1134,7 @@ ffffcb0e`0bc69ae8  ffffcb0e`0bc698a0 fffff805`109eb4b0
 
 ```
 
-With ALL of that out of the way, I then had a decent understanding of what I had to do to get at the callbacks I needed to patch:
+With ALL of that out of the way, I then had a decent understanding of what I had to do to overwrite the callbacks I was testing.:
 
 1. Somehow find the frame
 2. Find all the volumes in the frame
@@ -1136,7 +1147,9 @@ There were two small problems, though:
 2. What the hell am I going to patch the callbacks with?
 
 #### 1.3.1 How do I find the frame?
-I started poking around various get/set/enumerate functions to see if there was somewhere I could find a reference to a frame or list of frames when I came across `FltEnumerateFilters`. Turns out, and through trial and error, I'd found a reference to a global variable called...  \*drum roll\*  `FLTMGR!FltGlobals` through an exported function.
+I started poking around various get/set/enumerate functions to see if there was somewhere I could find a reference to a frame or list of frames when I came across... brace yourself... `FltEnumerateFilters`. Turns out, and through trial and error, I'd found a reference to a global variable called...  \*drum roll\*  `FLTMGR!FltGlobals` within `FltEnumerateFilters`.
+
+Thankfully `FltEnumerateFilters` is exported and can be used to easily calculate the address of `FltGlobals`.
 
 ```
 kd> uf FLTMGR!FltEnumerateFilters
@@ -1244,7 +1257,7 @@ kd> dt FLTMGR!_GLOBALS
    +0x12a0 InitialRundownSize : Uint8B
 ```
 
-To find the list of frames, I must load access the `_FLT_RESOURCE_LIST_HEAD` for the frame list, and iterate over every element (one per frame). Once the frames were found, iterating over every frame to find every volume/instance would follow the exact same process. Perfect! 
+To find the list of frames, I must access the `_FLT_RESOURCE_LIST_HEAD` for the frame list, and iterate over every element (one per frame). Once the frames were found, I could iterate over every filter, volume, and instance contained within the frame. Perfect.
 
 But that just leaves me with the second question...
 
@@ -1263,7 +1276,7 @@ For pre-operation callbacks, the following return values indicate statuses back 
 | FLT_PREOP_DISALLOW_FSFILTER_IO | 6 | Disallow FastIO file creation. |
 https://googleprojectzero.blogspot.com/2021/01/hunting-for-bugs-in-windows-mini-filter.html
 
-So to patch out the pre-operation I needed to either return 1 or 4.
+So to patch out the pre-operation I needed to either return FLT_PREOP_SUCCESS_WITH_CALLBACK (1) or FLT_PREOP_COMPLETE (4).
 Searching for gadgets within Ntoskrnl led me to `KeIsEmptyAffinityEx`:
 
 ```
@@ -1301,29 +1314,33 @@ fffff805`0d00f08d c3              ret
 So all I had to do was patch the pre-operation callback to `nt!KeIsEmptyAffinityEx+0x24` to always return `FLT_PREOP_SUCCESS_WITH_CALLBACK`.
 
 For post-operation callbacks, the process is identical, and the following return values indicate statuses back to FltMgr:
+
 | Status | Value | Description |
 | --- | --- | --- |
 | FLT_POSTOP_FINISHED_PROCESSING | 0 | The callback was successful. No further processing required. |
 | FLT_POSTOP_MORE_PROCESSING_REQUIRED | 1 | Halts completion of the IO request. The operation will be pending until the filter driver completes it. |
-| FLT_POSTOP_DISALLOW_FSFILTER_IO | 2 | Disallow FastIO file creation.|
+| FLT_POSTOP_DISALLOW_FSFILTER_IO | 2 | Disallow FastIO file creation. |
 
-Luckily I could reuse the same function for my gadget to patch the callback with at `nt!KeIsEmptyAffinityEx+0x2b` to always return `FLT_POSTOP_FINISHED_PROCESSING`.
-
-An astute reader may note that this would be easy to forensically identify as the callback patch destination is outside of the module's address space. You're absolutely right (thank you for pointing this out to me, qkumba <3). Not to worry, as this is only a PoC and I can hand-wave this concern away by just yelling "PoC" repeatedly.
+Luckily, I could reuse the same function for my gadget to patch the callback with at `nt!KeIsEmptyAffinityEx+0x2b` to always return `FLT_POSTOP_FINISHED_PROCESSING`.
 
 With all of that done and dusted, we're left with simple steps to patch minifilter callbacks on a system using a virtual read/write primitive.
 
 1. Find the base address of FltMgr
-2. Find the base address of our target minifilter to patch
-3. Find FltGlobals
-4. Find the list of frames
-5. For every frame in the list of frames:
+2. Find the base address of Ntoskrnl
+3. Find the base address of our target minifilter to patch
+4. Find FltGlobals
+5. Find our return 1 and return 0 gadgets
+6. Find the list of frames
+7. For every frame in the list of frames:
 	1. walk the filter list until we find our target filter
 	2. read all of our target filter's `_FLT_OPERATION_REGISTRATION` objects
 	3. walk the volumes attached to the frame
-4. For every volume in the target frame:
+8. For every volume in the target frame:
 	1. Access the `_CALLBACK_CTRL` object
 	2. For every callback we want to patch:
 		1. Index into `_CALLBACK_CTRL->_LIST_ENTRY[50]` with the callbacks major function to get the list of callbacks supported for that major function
 		2. For every element in the list of `_CALLBACK_NODE` objects:
 			1. Compare our pre/post operations and patch them if they match
+
+### 2.0 Leveraging Dell's dbutil_2_3.sys to Patch Minifilter Callbacks
+

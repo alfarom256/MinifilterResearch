@@ -17,14 +17,16 @@ int main(int argc, char** argv) {
 	Memory m = Memory();
 	FltManager oFlt = FltManager(&m);
 	HANDY_FUNCTIONS gl_hf = { 0 };
-	BOOL resolvedPatchFuncs = oFlt.ResolveFunctionsForPatch(&gl_hf);
-	printf("Found return one gadget at %llx\n", gl_hf.FuncReturns1);
-	printf("Found return zero gadget at %llx\n", gl_hf.FuncReturns0);
 
-	if (!(gl_hf.FuncReturns0 && gl_hf.FuncReturns1)) {
-		getchar();
+	BOOL resolvedPatchFuncs = oFlt.ResolveFunctionsForPatch(&gl_hf);
+
+	if (!resolvedPatchFuncs) {
+		puts("Failed to resolve functions used for patching!");
 		exit(-1);
 	}
+
+	printf("Found return one gadget at %llx\n", (DWORD64)gl_hf.FuncReturns1);
+	printf("Found return zero gadget at %llx\n", (DWORD64)gl_hf.FuncReturns0);
 
 	DWORD dwX = oFlt.GetFrameCount();
 	printf("Flt globals is at %p\n", oFlt.lpFltGlobals);
@@ -39,6 +41,11 @@ int main(int argc, char** argv) {
 
 
 	PVOID lpFrame = oFlt.GetFrameForFilter(lpFilter);
+	if (!lpFrame) {
+		puts("Failed to get frame for filter!");
+		exit(-1);
+	}
+
 	printf("Frame for filter is at %p\n", lpFrame);
 
 	auto vecOperations = oFlt.GetOperationsForFilter(lpFilter);
@@ -49,15 +56,12 @@ int main(int argc, char** argv) {
 
 	auto frameVolumes = oFlt.EnumFrameVolumes(lpFrame);
 	const wchar_t* strHardDiskPrefix = LR"(\Device\HarddiskVolume)";
-
-	/*auto count = std::_Erase_nodes_if(frameVolumes, [strHardDiskPrefix](const auto& it) {
-		return wcsncmp(it.first, strHardDiskPrefix, lstrlenW(strHardDiskPrefix)) != 0;
-	});
-	for (auto x : frameVolumes) {
-		printf("Retained target volume : %S - %p\n", x.first, x.second);
-	}*/
 	
 	BOOL bRes = oFlt.RemovePrePostCallbacksForVolumesAndCallbacks(vecOperations, frameVolumes, &gl_hf);
+	if (!bRes) {
+		puts("Error patching pre and post callbacks!");
+		exit(-1);
+	}
 
 	return 0;
 }

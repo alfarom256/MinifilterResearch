@@ -364,6 +364,11 @@ PVOID FltManager::GetFrameForFilter(LPVOID lpFilter)
 		sizeof(PVOID)
 	);
 
+	if (!b) {
+		puts("Failed to read filter frame!");
+		return NULL;
+	}
+
 	return lpFrame;
 }
 
@@ -385,6 +390,12 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 		sizeof(DWORD64)
 	);
 
+	if (!b) {
+		puts("Failed to read Operation Registration Ptr!");
+		return  std::vector<FLT_OPERATION_REGISTRATION>();
+	}
+
+
 	printf("Operations at %llx\n", qwOperationRegPtr);
 	while (TRUE) {
 		FLT_OPERATION_REGISTRATION* fltIter = new FLT_OPERATION_REGISTRATION();
@@ -393,6 +404,11 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 			fltIter,
 			sizeof(FLT_OPERATION_REGISTRATION)
 		);
+
+		if (!b) {
+			puts("Failed to read next Operation Registration!");
+			return  std::vector<FLT_OPERATION_REGISTRATION>();
+		}
 		
 		// read until we get IRP_MJ_OPERATION_END
 		if (fltIter->MajorFunction == IRP_MJ_OPERATION_END) {
@@ -419,6 +435,10 @@ std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 		&ulNumVolumes,
 		sizeof(ULONG)
 	);
+	if (!b) {
+		puts("Failed to read volume count!");
+		return  std::unordered_map<wchar_t*, PVOID>();
+	}
 
 	printf("Found %d attached volumes for frame %p\n", ulNumVolumes, lpFrame);
 
@@ -427,7 +447,11 @@ std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 		(DWORD64)lpFrame + FRAME_OFFSET_VOLUME_LIST + VOLUME_LIST_OFFSET_LIST,
 		&qwListIter,
 		sizeof(DWORD64)
-	);
+	); 
+	if (!b) {
+		puts("Failed to read volume list head!");
+		return  std::unordered_map<wchar_t*, PVOID>();
+	}
 
 	for (ULONG i = 0; i < ulNumVolumes; i++) {
 		DWORD64 lpVolume = qwListIter - 0x10;
@@ -442,6 +466,10 @@ std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 			&ulDeviceNameLen,
 			sizeof(USHORT)
 		);
+		if (!b) {
+			puts("Failed to read unicode string length!");
+			return  std::unordered_map<wchar_t*, PVOID>();
+		}
 
 		// read the pointer to the buffer
 		b = this->objMemHandler->VirtualRead(
@@ -449,7 +477,10 @@ std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 			&lpBufferPtr,
 			sizeof(DWORD64)
 		);
-
+		if (!b) {
+			puts("Failed to read unicode string buffer ptr!");
+			return  std::unordered_map<wchar_t*, PVOID>();
+		}
 
 		// then read the actual buffer
 		wchar_t* buf = new wchar_t[(SIZE_T)ulDeviceNameLen + 2];
@@ -460,6 +491,10 @@ std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 			buf,
 			ulDeviceNameLen
 		);
+		if (!b) {
+			puts("Failed to read unicode string buffer!");
+			return  std::unordered_map<wchar_t*, PVOID>();
+		}
 
 		retVal[buf] = (PVOID)lpVolume;
 
@@ -471,6 +506,11 @@ std::unordered_map<wchar_t*, PVOID> FltManager::EnumFrameVolumes(LPVOID lpFrame)
 			&qwListIter,
 			sizeof(DWORD64)
 		);
+
+		if (!b) {
+			puts("Failed to read next volume link!");
+			return  std::unordered_map<wchar_t*, PVOID>();
+		}
 	}
 	return retVal;
 }
