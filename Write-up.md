@@ -1,6 +1,6 @@
 ## 0.0 - Intro
 ### 0.1 Abstract
-This research project served to help me learn more about file system minifilter drivers and how a malicious actor may leverage a vulnerable driver to patch callbacks for minifilters. Along the way, I'd discovered previous research by Aviad Shamriz which helped me immensely in my endeavor.
+This research project served to help me learn more about file system minifilter drivers and how a malicious actor may leverage a vulnerable driver to patch callbacks for minifilters. In my research, I'd discovered previous research by Aviad Shamriz which helped me immensely in my endeavor.
 
 https://aviadshamriz.medium.com/part-1-fs-minifilter-hooking-7e743b042a9d
 
