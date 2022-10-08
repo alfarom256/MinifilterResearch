@@ -22,20 +22,8 @@
     <ClCompile Include="DemoMinifilter.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Callbacks.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Helpers.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Callbacks.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Helpers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="FltDef.h">
       <Filter>Header Files</Filter>
     </ClInclude>

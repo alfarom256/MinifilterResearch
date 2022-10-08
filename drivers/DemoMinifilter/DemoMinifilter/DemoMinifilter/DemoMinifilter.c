@@ -1,13 +1,33 @@
 #include <fltKernel.h>
 #include <ntddk.h>
-#include "Callbacks.h"
-#include "Helpers.h"
-#include "FltDef.h"
 
-EXTERN_C NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath);
+NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath);
 NTSTATUS FsFilterUnload(_In_ FLT_FILTER_UNLOAD_FLAGS Flags);
 
 PFLT_FILTER g_FilterHandle;
+static const UNICODE_STRING g_TargetFileName = RTL_CONSTANT_STRING(L"\\Users\\User\\Desktop\\test.txt");
+
+
+FLT_PREOP_CALLBACK_STATUS PreCreateCallback(
+	_Inout_ PFLT_CALLBACK_DATA lpFltCallbackData,
+	_In_ PCFLT_RELATED_OBJECTS lpFltRelatedObj, 
+	_Out_ PVOID* lpCompletionContext)
+{
+
+	UNREFERENCED_PARAMETER(lpFltCallbackData);
+	*lpCompletionContext = NULL;
+	PFILE_OBJECT lpFileObject = lpFltRelatedObj->FileObject;
+	PUNICODE_STRING lpFileName = &lpFileObject->FileName;
+
+	// desktop\test.txt
+	if (RtlCompareUnicodeString(&g_TargetFileName, lpFileName, TRUE) == 0) {
+		HANDLE hPid = PsGetCurrentProcessId();
+		DbgPrint("[DEMOFLT] PID %p - Create - %wZ\n", hPid, lpFileName);
+	}
+
+	return FLT_PREOP_SUCCESS_NO_CALLBACK;
+}
+
 
 const FLT_OPERATION_REGISTRATION Callbacks[] = {
 	{
@@ -54,28 +74,5 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 	}
 
 	FltStartFiltering(g_FilterHandle);
-	
-	UNICODE_STRING strFilterName = RTL_CONSTANT_STRING(L"DemoMinifilter");
-	//PFLT_OPERATION_REGISTRATION lpFltOpReg_Create = QueryMinifilterMajorOperation(&strFilterName, IRP_MJ_CREATE);
-	//if (!lpFltOpReg_Create) {
-	//	DbgPrint("Could not find IRP_MJ_CREATE for filter %wZ\n", &strFilterName);
-	//	return status;
-	//}
-
-	//DbgPrint("Found IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
-	//DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
-	//DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
-	//DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
-
-	//PVOID lpRet1 = FindRet1();
-	//if (lpRet1) {
-	//	lpFltOpReg_Create->PreOperation = (PFLT_PRE_OPERATION_CALLBACK)PreCreateCallback2;
-	//}
-
-	//DbgPrint("After change IRP_MJ_CREATE Registration at %p\n", lpFltOpReg_Create);
-	//DbgPrint("PreCallback %p\n", lpFltOpReg_Create->PreOperation);
-	//DbgPrint("PostCallback %p\n", lpFltOpReg_Create->PostOperation);
-	//DbgPrint("Flags %x\n", lpFltOpReg_Create->Flags);
-	BorkMinifilter(&strFilterName);
 	return status;
 }

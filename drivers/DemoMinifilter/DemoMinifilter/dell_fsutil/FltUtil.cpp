@@ -344,7 +344,6 @@ PVOID FltManager::GetFilterByName(const wchar_t* strFilterName)
 				return NULL;
 			}
 
-
 			// free the buffer 
 			delete[] buf;
 		}

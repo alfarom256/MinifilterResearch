@@ -35,9 +35,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Callbacks.c" />
     <ClCompile Include="DemoMinifilter.c" />
-    <ClCompile Include="Helpers.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{03D757F7-C5BD-4C0B-948B-E8273266591F}</ProjectGuid>
@@ -181,9 +179,7 @@
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Callbacks.h" />
     <ClInclude Include="FltDef.h" />
-    <ClInclude Include="Helpers.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
