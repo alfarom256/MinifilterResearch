@@ -17,6 +17,7 @@ Shoutout to the vxug community and my friends for inspiration and guidance:
 * s4r1n
 * cb
 * Jonas
+* vx homies <3
 
 ### 0.3 Setup
 Testing was performed on the Windows 11 Enterprise Evaluation VM on Hyper-V with VBS and HVCI disabled.
