@@ -2216,6 +2216,10 @@ Found 7 attached volumes for frame FFFFE287B70BD6A0
 Patched 114 callbacks
 ```
 
+The full code may be found at `<GITHUB REPO HERE>`.
+
 ## 3.0 Outro
 
 Thank you to all the amazing people contributing to research in this area, without whom this project would not be possible. I'm sure there are things I could do better in this PoC, so please feel free to let me know.
+
+Huge thanks to the vx community for the chance to publish this work, and thank you to my friends and mentors I have had the pleasure of working with over the past few years.
