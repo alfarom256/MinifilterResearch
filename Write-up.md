@@ -17,6 +17,8 @@ Shoutout to the vxug community and my friends for inspiration and guidance:
 * s4r1n
 * cb
 * Jonas
+* tsteele93
+* rad9800
 * vx homies <3
 
 ### 0.3 Setup
