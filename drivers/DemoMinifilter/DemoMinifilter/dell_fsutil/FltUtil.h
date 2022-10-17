@@ -57,7 +57,11 @@ public:
 
 	std::unordered_map<wchar_t*, PVOID> EnumFrameVolumes(LPVOID lpFrame);
 	DWORD GetFrameCount();
-	BOOL RemovePrePostCallbacksForVolumesAndCallbacks(std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, std::unordered_map<wchar_t*, PVOID> mapTargetVolumes, PHANDY_FUNCTIONS lpHandyFuncs);
+	BOOL RemovePrePostCallbacksForVolumesAndCallbacks(
+		std::vector<FLT_OPERATION_REGISTRATION> vecTargetOperations, 
+		std::unordered_map<wchar_t*, PVOID> mapTargetVolumes,
+		PHANDY_FUNCTIONS lpHandyFuncs
+	);
 
 private:
 	ULONG ulNumFrames;

@@ -415,7 +415,6 @@ std::vector<FLT_OPERATION_REGISTRATION> FltManager::GetOperationsForFilter(PVOID
 		}
 		retVec.push_back(*fltIter);
 		qwOperationRegPtr += sizeof(FLT_OPERATION_REGISTRATION);
-
 	}
 
 	return retVec;
